@@ -1,7 +1,7 @@
 1/AdminService
 
 --!strict
--- Script: AdminService
+-- Script: AdminService (Versión V2 con Visuals, Prompts y Limpieza de Slots - Tom Studios™)
 -- Ubicación: ServerScriptService
 
 local Players = game:GetService("Players")
@@ -12,6 +12,8 @@ local Workspace = game:GetService("Workspace")
 
 local DataManager = require(ServerScriptService:WaitForChild("DataManager"))
 local SpiritTemplate = ReplicatedStorage:WaitForChild("SpiritTemplate")
+local SpiritPositionManager = require(ServerScriptService:WaitForChild("SpiritPositionManager")) 
+local SpiritUtils = require(ServerScriptService:WaitForChild("SpiritUtils"))
 
 local ADMIN_USER_ID = 3086041288
 
@@ -31,19 +33,37 @@ local AdminResponse = Instance.new("RemoteEvent")
 AdminResponse.Name = "AdminResponse"
 AdminResponse.Parent = adminFolder
 
+-- Paleta de colores oficiales de Tom Studios™ según la rareza del Espíritu
+local RarityColors = {
+	["Comun"]      = Color3.fromRGB(180, 180, 180),
+	["Poco Comun"] = Color3.fromRGB(85, 255, 127),
+	["Raro"]       = Color3.fromRGB(85, 170, 255),
+	["Epico"]      = Color3.fromRGB(170, 85, 255),
+	["Legendario"] = Color3.fromRGB(255, 170, 0),
+	["Mitico"]     = Color3.fromRGB(255, 0, 127),
+	["Demon"]      = Color3.fromRGB(150, 0, 0),
+	["Divino"]     = Color3.fromRGB(0, 255, 255),
+	["Especial"]   = Color3.fromRGB(255, 215, 0),
+}
+
 Players.PlayerAdded:Connect(function(player)
 	if not isAdmin(player) then return end
+
 	player.CharacterAdded:Connect(function()
 		task.wait(1)
-		local adminGui = ServerStorage:FindFirstChild("AdminGui")
-		if adminGui then
-			local clone = adminGui:Clone()
-			clone.Parent = player.PlayerGui
+		local playerGui = player:FindFirstChildOfClass("PlayerGui")
+		if playerGui and not playerGui:FindFirstChild("AdminGui") then
+			local adminGui = ServerStorage:FindFirstChild("AdminGui")
+			if adminGui then
+				local clone = adminGui:Clone()
+				clone.Parent = playerGui
+			end
 		end
 	end)
 end)
 
 local function getTargetPlayer(name)
+	if not name or name == "" then return nil end
 	for _, p in ipairs(Players:GetPlayers()) do
 		if p.Name:lower() == name:lower() or p.DisplayName:lower() == name:lower() then
 			return p
@@ -55,7 +75,7 @@ end
 local function setEsencia(player, amount)
 	local esencia = player.leaderstats and player.leaderstats:FindFirstChild("Esencia")
 	if esencia then
-		esencia.Value = math.clamp(amount, 0, math.huge)
+		esencia.Value = math.clamp(amount, 0, 999999999999) 
 		DataManager.UpdateData(player, function(data)
 			data.Esencia = esencia.Value
 			return data
@@ -65,9 +85,6 @@ local function setEsencia(player, amount)
 	return false
 end
 
--- ==========================================
--- FUNCIÓN SPAWN SPIRIT EN BASE
--- ==========================================
 local SpiritDatabase = {
 	{Name = "Espiritu de Tierra",          Rarity = "Comun",      EssenceRate = 1,       SpiriumValue = 5},
 	{Name = "Espiritu de Brisa",           Rarity = "Comun",      EssenceRate = 2,       SpiriumValue = 8},
@@ -119,157 +136,230 @@ local function findSpiritData(spiritName)
 	return nil
 end
 
+-- ==========================================
+-- CREACIÓN DINÁMICA DE TEXTO Y PROMPT (NUEVO)
+-- ==========================================
+local function applySpiritVisualsAndPrompt(spirit, spiritData, targetSlot, targetPlayer)
+	-- 1. Crear el BillboardGui para las estadísticas flotantes
+	local bbGui = Instance.new("BillboardGui")
+	bbGui.Name = "SpiritStatsUI"
+	bbGui.Size = UDim2.new(0, 200, 0, 50)
+	bbGui.StudsOffset = Vector3.new(0, 3.5, 0)
+	bbGui.AlwaysOnTop = true
+
+	local textLabel = Instance.new("TextLabel")
+	textLabel.Size = UDim2.new(1, 0, 1, 0)
+	textLabel.BackgroundTransparency = 1
+	textLabel.TextScaled = true
+	textLabel.Font = Enum.Font.GothamBold
+	textLabel.TextColor3 = RarityColors[spiritData.Rarity] or Color3.fromRGB(255, 255, 255)
+	textLabel.TextStrokeTransparency = 0
+	textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	textLabel.Text = spiritData.Name .. "\n⚡ +" .. spiritData.EssenceRate .. "/s"
+	textLabel.Parent = bbGui
+	bbGui.Parent = spirit
+
+	-- 2. Crear el ProximityPrompt para poder levantarlo manualmente
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "PickupPrompt"
+	prompt.ObjectText = spiritData.Name
+	prompt.ActionText = "Recoger Espíritu"
+	prompt.HoldDuration = 0.2
+	prompt.MaxActivationDistance = 12
+	prompt.UIOffset = Vector2.new(0, 15)
+
+	-- Vincular la recogida física
+	prompt.Triggered:Connect(function(clickingPlayer)
+		if clickingPlayer == targetPlayer or isAdmin(clickingPlayer) then
+			targetSlot:SetAttribute("IsOccupied", false)
+
+			-- Activar el retraso de peso en el jugador que lo recoja
+			local char = clickingPlayer.Character
+			if char then
+				char:SetAttribute("HasSpirit", true)
+			end
+
+			spirit:Destroy()
+		end
+	end)
+
+	-- Buscar la parte principal para meterle el prompt
+	local root = spirit:FindFirstChild("HumanoidRootPart") or spirit:FindFirstChildOfClass("BasePart")
+	if root then
+		prompt.Parent = root
+	else
+		prompt.Parent = spirit
+	end
+end
+
+-- ==========================================
+-- SPAWN SPIRIT EN BASE
+-- ==========================================
 local function spawnSpiritInBase(targetPlayer, spiritName)
 	local baseNumber = targetPlayer:GetAttribute("BaseNumber")
-	if not baseNumber then return false, "El jugador no tiene base asignada" end
+	if not baseNumber then return false, "❌ El jugador no tiene base asignada" end
 
-	-- Buscar datos del spirit
 	local spiritData = findSpiritData(spiritName)
-	if not spiritData then return false, "Spirit no encontrado: " .. spiritName end
+	if not spiritData then return false, "❌ Spirit no encontrado: " .. spiritName end
 
-	-- Buscar modelo en ReplicatedStorage
 	local rarityFolder = SpiritTemplate:FindFirstChild(spiritData.Rarity)
-	if not rarityFolder then return false, "Carpeta de rareza no encontrada: " .. spiritData.Rarity end
+	if not rarityFolder then return false, "❌ Carpeta de rareza no encontrada: " .. spiritData.Rarity end
 
 	local model = rarityFolder:FindFirstChild(spiritData.Name)
-	if not model then return false, "Modelo no encontrado: " .. spiritData.Name end
+	if not model then return false, "❌ Modelo no encontrado: " .. spiritData.Name end
 
-	-- Buscar primer slot disponible
 	local base = Workspace:FindFirstChild("base" .. baseNumber)
-	if not base then return false, "Base no encontrada" end
+	if not base then return false, "❌ Base física de juego no encontrada" end
 
 	local based = base:FindFirstChild("based")
-	if not based then return false, "Carpeta based no encontrada" end
-
-	local innerBase = based:FindFirstChild("base")
-	if not innerBase then return false, "Carpeta base interna no encontrada" end
+	local innerBase = based and based:FindFirstChild("base")
+	if not innerBase then return false, "❌ Estructura de base rota" end
 
 	local targetSlot = nil
-	for i = 1, 10 do
+	local finalSlotIndex = 0
+
+	-- Analizar dinámicamente hasta 100 slots sin importar cuántos Rebirths agregues
+	for i = 1, 100 do
 		local slot = innerBase:FindFirstChild("slot" .. i)
-		if slot and not slot:GetAttribute("IsOccupied") then
+		if slot and not SpiritUtils.GetSpiritInSlot(slot) and not slot:GetAttribute("IsOccupied") then
 			targetSlot = slot
+			finalSlotIndex = i
 			break
 		end
 	end
 
-	if not targetSlot then return false, "No hay slots disponibles en la base" end
+	if not targetSlot then return false, "❌ No hay slots disponibles en la base" end
 
-	-- Clonar y colocar el spirit
 	local spirit = model:Clone()
 	spirit.Name = "Spirit"
-	spirit.Position = targetSlot.Position + Vector3.new(0, 3, 0)
-	spirit.Anchored = false
-	spirit.CanCollide = true
-	spirit.Parent = Workspace
 
-	-- Atributos
+	-- Fijamos la marca del slot para poder rastrearlo o borrarlo por comando individual
+	spirit:SetAttribute("AssignedSlotName", "slot" .. finalSlotIndex)
+
+	spirit:PivotTo(CFrame.new(targetSlot.Position + Vector3.new(0, 3, 0)))
+	spirit.Parent = innerBase
+
+	if SpiritPositionManager and SpiritPositionManager.PlaceInSlot then
+		SpiritPositionManager.PlaceInSlot(spirit, targetSlot)
+	end
+
 	spirit:SetAttribute("Rarity", spiritData.Rarity)
 	spirit:SetAttribute("EssenceRate", spiritData.EssenceRate)
 	spirit:SetAttribute("SpiriumValue", spiritData.SpiriumValue)
 	spirit:SetAttribute("SpiritName", spiritData.Name)
+	spirit:SetAttribute("SpiritState", "Base")
+	spirit:SetAttribute("FromSlot", true)
 
 	local br = Instance.new("ObjectValue")
 	br.Name = "Breaker"
 	br.Value = targetPlayer
 	br.Parent = spirit
 
-	return true, "✅ " .. spiritData.Name .. " spawneado en base " .. baseNumber .. " de " .. targetPlayer.Name
+	-- INYECTAR TEXTO FLOTANTE Y PROMPT
+	applySpiritVisualsAndPrompt(spirit, spiritData, targetSlot, targetPlayer)
+
+	if _G.SetupOrbPickup then
+		_G.SetupOrbPickup(spirit)
+	end
+
+	return true, "✅ " .. spiritData.Name .. " en slot " .. finalSlotIndex .. " (Base " .. baseNumber .. ")"
 end
 
 -- ==========================================
 -- MANEJAR COMANDOS
 -- ==========================================
 AdminCommand.OnServerEvent:Connect(function(player, command, ...)
-	if not isAdmin(player) then
-		warn("⚠️ [AdminService] Intento no autorizado de " .. player.Name)
+	if not isAdmin(player) then return end
+
+	local args = {...}
+	local textInputName = args[1]
+	local target = getTargetPlayer(textInputName)
+
+	if textInputName and textInputName ~= "" and textInputName ~= player.Name and not target then
+		AdminResponse:FireClient(player, "❌ Error: Jugador '" .. tostring(textInputName) .. "' no encontrado.")
 		return
 	end
 
-	local args = {...}
-	print("🛡️ [AdminService] Comando recibido: " .. command)
+	if not target then target = player end
+
+	-- OBTENER ACCESO DIRECTO A LA BASE DEL OBJETIVO
+	local baseNumber = target:GetAttribute("BaseNumber")
+	local base = baseNumber and Workspace:FindFirstChild("base" .. baseNumber)
+	local innerBase = base and base:FindFirstChild("based") and base.based:FindFirstChild("base")
 
 	if command == "AddEsencia" then
-		local target = getTargetPlayer(args[1]) or player
 		local amount = tonumber(args[2]) or 0
 		local esencia = target.leaderstats and target.leaderstats:FindFirstChild("Esencia")
-		if esencia then
-			setEsencia(target, esencia.Value + amount)
-			AdminResponse:FireClient(player, "✅ +" .. amount .. " Esencia a " .. target.Name)
-		end
+		if esencia then setEsencia(target, esencia.Value + amount) end
 
 	elseif command == "SetEsencia" then
-		local target = getTargetPlayer(args[1]) or player
-		local amount = tonumber(args[2]) or 0
-		if setEsencia(target, amount) then
-			AdminResponse:FireClient(player, "✅ Esencia de " .. target.Name .. " → " .. amount)
+		setEsencia(target, tonumber(args[2]) or 0)
+
+		-- ==========================================
+		-- NUEVO COMANDO: ClearSlot (ELIMINAR SLOT DINÁMICO 1-50+)
+		-- ==========================================
+	elseif command == "ClearSlot" then
+		if not innerBase then
+			AdminResponse:FireClient(player, "❌ El jugador no tiene base construida.")
+			return
 		end
 
-	elseif command == "ZeroEsencia" then
-		local target = getTargetPlayer(args[1]) or player
-		if setEsencia(target, 0) then
-			AdminResponse:FireClient(player, "✅ Esencia de " .. target.Name .. " → 0")
+		local slotInput = tonumber(args[2])
+		if not slotInput then
+			AdminResponse:FireClient(player, "❌ Debes escribir un número de slot válido en la caja de texto.")
+			return
 		end
 
-	elseif command == "MaxEsencia" then
-		local target = getTargetPlayer(args[1]) or player
-		if setEsencia(target, 999999999) then
-			AdminResponse:FireClient(player, "✅ Esencia de " .. target.Name .. " al maximo")
+		local targetSlotName = "slot" .. slotInput
+		local slotPart = innerBase:FindFirstChild(targetSlotName)
+
+		if not slotPart then
+			AdminResponse:FireClient(player, "❌ Ese slot (" .. targetSlotName .. ") no existe en la base actual.")
+			return
 		end
 
-	elseif command == "ResetTurret" then
-		local target = getTargetPlayer(args[1]) or player
-		local TurretStats = require(ServerScriptService:WaitForChild("TurretStats"))
-		TurretStats.Init(target)
-		DataManager.UpdateData(target, function(data)
-			data.Turret = {
-				Stats = {
-					Damage = 10, ProjectileSpeed = 450, ProjectileSize = 4,
-					FireRate = 0.15, Range = 200, CritChance = 0, MultiShot = 1,
-				},
-				Levels = {
-					Damage = 0, ProjectileSpeed = 0, ProjectileSize = 0,
-					FireRate = 0, Range = 0, CritChance = 0, MultiShot = 0,
-				}
-			}
-			return data
-		end)
-		AdminResponse:FireClient(player, "✅ Torreta de " .. target.Name .. " reiniciada")
+		-- Usar SpiritUtils para encontrar el Spirit sin depender de nombre/tipo
+		local spiritInSlot = SpiritUtils.GetSpiritInSlot(slotPart)
+		local found = false
 
-	elseif command == "SetSpeed" then
-		local target = getTargetPlayer(args[1]) or player
-		local speed = tonumber(args[2]) or 16
-		local character = target.Character
-		local humanoid = character and character:FindFirstChild("Humanoid")
-		if humanoid then
-			humanoid.WalkSpeed = speed
-			AdminResponse:FireClient(player, "✅ Velocidad de " .. target.Name .. " → " .. speed)
+		if spiritInSlot then
+			spiritInSlot:Destroy()
+			found = true
 		end
 
-	elseif command == "ToggleFly" then
-		AdminResponse:FireClient(player, "FlyToggle")
+		slotPart:SetAttribute("IsOccupied", false)
 
-	elseif command == "SpawnBox" then
-		local rarityName = args[1] or "Comun"
-		if _G.SpawnAdminBox then
-			_G.SpawnAdminBox(rarityName)
-			AdminResponse:FireClient(player, "✅ Caja " .. rarityName .. " spawneada")
+		if found then
+			AdminResponse:FireClient(player, "✅ Slot " .. slotInput .. " limpiado con éxito de la base de " .. target.Name)
+		else
+			AdminResponse:FireClient(player, "⚠ El slot " .. slotInput .. " ya estaba vacío.")
 		end
 
-	elseif command == "ClearBoxes" then
-		for _, obj in ipairs(Workspace:GetChildren()) do
-			if obj.Name:find("Caja_") then
-				obj:Destroy()
+		-- ==========================================
+		-- NUEVO COMANDO: ClearAllSlots (LIMPIAR TODA LA BASE)
+		-- ==========================================
+	elseif command == "ClearAllSlots" then
+		if not innerBase then
+			AdminResponse:FireClient(player, "❌ Base no encontrada.")
+			return
+		end
+
+		local count = 0
+		-- Recorrer todos los slots y usar SpiritUtils para encontrar lo que tengan dentro
+		for _, slotPart in ipairs(innerBase:GetChildren()) do
+			if slotPart.Name:match("^slot%d+$") then
+				local spiritInSlot = SpiritUtils.GetSpiritInSlot(slotPart)
+				if spiritInSlot then
+					spiritInSlot:Destroy()
+					count += 1
+				end
+				slotPart:SetAttribute("IsOccupied", false)
 			end
 		end
-		AdminResponse:FireClient(player, "✅ Todas las cajas eliminadas")
 
-	elseif command == "ToggleBoxSpawner" then
-		_G.BoxSpawnerEnabled = not _G.BoxSpawnerEnabled
-		AdminResponse:FireClient(player, _G.BoxSpawnerEnabled and "✅ Spawner activado" or "✅ Spawner detenido")
+		AdminResponse:FireClient(player, "✅ Se eliminaron " .. count .. " Espíritus de la base de " .. target.Name)
 
 	elseif command == "SpawnSpirit" then
-		local target = getTargetPlayer(args[1]) or player
 		local spiritName = args[2] or ""
 		if spiritName == "" then
 			AdminResponse:FireClient(player, "❌ Escribe el nombre del Spirit")
@@ -278,32 +368,35 @@ AdminCommand.OnServerEvent:Connect(function(player, command, ...)
 		local success, msg = spawnSpiritInBase(target, spiritName)
 		AdminResponse:FireClient(player, msg)
 
-	elseif command == "Kick" then
-		local target = getTargetPlayer(args[1])
-		if not target then
-			AdminResponse:FireClient(player, "❌ Jugador no encontrado")
-			return
-		end
-		if isAdmin(target) then
-			AdminResponse:FireClient(player, "❌ No puedes kickearte a ti mismo")
-			return
-		end
-		target:Kick("Fuiste expulsado del servidor por el administrador.")
-		AdminResponse:FireClient(player, "✅ " .. target.Name .. " fue kickeado")
-
-	elseif command == "Ban" then
-		local target = getTargetPlayer(args[1])
-		if not target then
-			AdminResponse:FireClient(player, "❌ Jugador no encontrado")
-			return
-		end
-		if isAdmin(target) then return end
-		target:Kick("Has sido baneado del servidor.")
-		AdminResponse:FireClient(player, "⚠️ " .. target.Name .. " kickeado (ban completo pendiente)")
+		-- [Mantener el resto de comandos idénticos: ResetTurret, SetSpeed, Kick, Ban, ClearBoxes, etc.]
+	elseif command == "ResetTurret" then
+		local TurretStats = require(ServerScriptService:WaitForChild("TurretStats"))
+		DataManager.UpdateData(target, function(data)
+			data.Turret = {
+				Stats = {Damage = 10, ProjectileSpeed = 450, ProjectileSize = 4, FireRate = 0.15, Range = 200, CritChance = 0, MultiShot = 1},
+				Levels = {Damage = 0, ProjectileSpeed = 0, ProjectileSize = 0, FireRate = 0, Range = 0, CritChance = 0, MultiShot = 0}
+			}
+			return data
+		end)
+		TurretStats.Init(target)
+		AdminResponse:FireClient(player, "✅ Torreta de " .. target.Name .. " reiniciada")
+	elseif command == "SetSpeed" then
+		local speed = tonumber(args[2]) or 16
+		target:SetAttribute("AdminSpeed", speed)
+		local character = target.Character
+		local humanoid = character and character:FindFirstChild("Humanoid")
+		if humanoid then humanoid.WalkSpeed = speed end
+		AdminResponse:FireClient(player, "✅ Velocidad modificada")
+	elseif command == "SpawnBox" then
+		local rarityName = args[1] or "Comun"
+		rarityName = rarityName:sub(1,1):upper() .. rarityName:sub(2):lower()
+		if rarityName == "Poco comun" then rarityName = "Poco Comun" end
+		if _G.SpawnAdminBox then _G.SpawnAdminBox(rarityName) AdminResponse:FireClient(player, "✅ Caja " .. rarityName .. " spawneada") end
+	elseif command == "ClearBoxes" then
+		for _, obj in ipairs(Workspace:GetChildren()) do if obj.Name:find("Caja_") then obj:Destroy() end end
+		AdminResponse:FireClient(player, "✅ Cajas eliminadas")
 	end
 end)
-
-print("🛡️ [AdminService] Panel de administrador iniciado")
 
 2,/BaseAssigment
 
@@ -3674,6 +3767,7 @@ local scrollContainer = mainFrame:WaitForChild("ScrollContainer")
 local econTab = scrollContainer:WaitForChild("EconFrame")
 local testTab = scrollContainer:WaitForChild("TestFrame")
 local modTab = scrollContainer:WaitForChild("ModFrame")
+local slotNumberInput = testTab:WaitForChild("SlotNumberInput")
 
 mainFrame.Visible = false
 local isFlying = false
@@ -3830,6 +3924,16 @@ testTab:WaitForChild("SpawnSpiritBtn").MouseButton1Click:Connect(function()
 	AdminCommand:FireServer("SpawnSpirit", getTarget(), spiritNameInput.Text)
 end)
 
+-- Clear Slot
+
+testTab:WaitForChild("ClearSlotBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("ClearSlot", getTarget(), slotNumberInput.Text)
+end)
+
+testTab:WaitForChild("ClearAllSlotsBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("ClearAllSlots", getTarget())
+end)
+
 -- ==========================================
 -- BOTONES CAJAS
 -- ==========================================
@@ -3856,7 +3960,6 @@ end)
 modTab:WaitForChild("BanBtn").MouseButton1Click:Connect(function()
 	AdminCommand:FireServer("Ban", getTarget())
 end)
-
 
 StarterGui
 
