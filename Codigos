@@ -1,0 +1,5271 @@
+1/AdminService
+
+--!strict
+-- Script: AdminService
+-- Ubicación: ServerScriptService
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+local Workspace = game:GetService("Workspace")
+
+local DataManager = require(ServerScriptService:WaitForChild("DataManager"))
+local SpiritTemplate = ReplicatedStorage:WaitForChild("SpiritTemplate")
+
+local ADMIN_USER_ID = 3086041288
+
+local function isAdmin(player)
+	return player.UserId == ADMIN_USER_ID
+end
+
+local adminFolder = Instance.new("Folder")
+adminFolder.Name = "AdminEvents"
+adminFolder.Parent = ReplicatedStorage
+
+local AdminCommand = Instance.new("RemoteEvent")
+AdminCommand.Name = "AdminCommand"
+AdminCommand.Parent = adminFolder
+
+local AdminResponse = Instance.new("RemoteEvent")
+AdminResponse.Name = "AdminResponse"
+AdminResponse.Parent = adminFolder
+
+Players.PlayerAdded:Connect(function(player)
+	if not isAdmin(player) then return end
+	player.CharacterAdded:Connect(function()
+		task.wait(1)
+		local adminGui = ServerStorage:FindFirstChild("AdminGui")
+		if adminGui then
+			local clone = adminGui:Clone()
+			clone.Parent = player.PlayerGui
+		end
+	end)
+end)
+
+local function getTargetPlayer(name)
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Name:lower() == name:lower() or p.DisplayName:lower() == name:lower() then
+			return p
+		end
+	end
+	return nil
+end
+
+local function setEsencia(player, amount)
+	local esencia = player.leaderstats and player.leaderstats:FindFirstChild("Esencia")
+	if esencia then
+		esencia.Value = math.clamp(amount, 0, math.huge)
+		DataManager.UpdateData(player, function(data)
+			data.Esencia = esencia.Value
+			return data
+		end)
+		return true
+	end
+	return false
+end
+
+-- ==========================================
+-- FUNCIÓN SPAWN SPIRIT EN BASE
+-- ==========================================
+local SpiritDatabase = {
+	{Name = "Espiritu de Tierra",          Rarity = "Comun",      EssenceRate = 1,       SpiriumValue = 5},
+	{Name = "Espiritu de Brisa",           Rarity = "Comun",      EssenceRate = 2,       SpiriumValue = 8},
+	{Name = "Espiritu de Gota",            Rarity = "Comun",      EssenceRate = 3,       SpiriumValue = 10},
+	{Name = "Espiritu de Musgo",           Rarity = "Comun",      EssenceRate = 4,       SpiriumValue = 12},
+	{Name = "Espiritu de Chispa",          Rarity = "Comun",      EssenceRate = 5,       SpiriumValue = 15},
+	{Name = "Espiritu de Arena",           Rarity = "Poco Comun", EssenceRate = 8,       SpiriumValue = 30},
+	{Name = "Espiritu de Hielo",           Rarity = "Poco Comun", EssenceRate = 11,      SpiriumValue = 45},
+	{Name = "Espiritu de Fuego",           Rarity = "Poco Comun", EssenceRate = 14,      SpiriumValue = 60},
+	{Name = "Espiritu de Cristal",         Rarity = "Poco Comun", EssenceRate = 17,      SpiriumValue = 75},
+	{Name = "Espiritu de Trueno",          Rarity = "Poco Comun", EssenceRate = 20,      SpiriumValue = 90},
+	{Name = "Espiritu del Bosque",         Rarity = "Raro",       EssenceRate = 30,      SpiriumValue = 150},
+	{Name = "Espiritu Marino",             Rarity = "Raro",       EssenceRate = 38,      SpiriumValue = 180},
+	{Name = "Espiritu de Luna",            Rarity = "Raro",       EssenceRate = 47,      SpiriumValue = 220},
+	{Name = "Espiritu de Sombra",          Rarity = "Raro",       EssenceRate = 56,      SpiriumValue = 260},
+	{Name = "Espiritu del Viento Supremo", Rarity = "Raro",       EssenceRate = 65,      SpiriumValue = 300},
+	{Name = "Espiritu Fantasma",           Rarity = "Epico",      EssenceRate = 90,      SpiriumValue = 450},
+	{Name = "Espiritu Arcano",             Rarity = "Epico",      EssenceRate = 110,     SpiriumValue = 550},
+	{Name = "Espiritu de Magma",           Rarity = "Epico",      EssenceRate = 135,     SpiriumValue = 680},
+	{Name = "Espiritu de Tormenta",        Rarity = "Epico",      EssenceRate = 160,     SpiriumValue = 800},
+	{Name = "Espiritu del Vacio",          Rarity = "Epico",      EssenceRate = 180,     SpiriumValue = 900},
+	{Name = "Espiritu de la Vida",         Rarity = "Legendario", EssenceRate = 250,     SpiriumValue = 1200},
+	{Name = "Espiritu de la Estrella",     Rarity = "Legendario", EssenceRate = 320,     SpiriumValue = 1500},
+	{Name = "Espiritu del Sol",            Rarity = "Legendario", EssenceRate = 400,     SpiriumValue = 1800},
+	{Name = "Espiritu del Tiempo",         Rarity = "Legendario", EssenceRate = 470,     SpiriumValue = 2100},
+	{Name = "Espiritu del Dragon",         Rarity = "Legendario", EssenceRate = 550,     SpiriumValue = 2500},
+	{Name = "Espiritu del Caos",           Rarity = "Mitico",     EssenceRate = 800,     SpiriumValue = 3500},
+	{Name = "Espiritu del Juicio",         Rarity = "Mitico",     EssenceRate = 1000,    SpiriumValue = 4200},
+	{Name = "Espiritu de la Muerte",       Rarity = "Mitico",     EssenceRate = 1300,    SpiriumValue = 5000},
+	{Name = "Espiritu de la Dimension",    Rarity = "Mitico",     EssenceRate = 1650,    SpiriumValue = 5800},
+	{Name = "Espiritu del Infinito",       Rarity = "Mitico",     EssenceRate = 2000,    SpiriumValue = 6500},
+	{Name = "Espiritu Demonio",            Rarity = "Demon",      EssenceRate = 3000,    SpiriumValue = 8000},
+	{Name = "Espiritu de la Perdicion",    Rarity = "Demon",      EssenceRate = 4000,    SpiriumValue = 9500},
+	{Name = "Espiritu de la Pesadilla",    Rarity = "Demon",      EssenceRate = 5200,    SpiriumValue = 11000},
+	{Name = "Espiritu Infernal",           Rarity = "Demon",      EssenceRate = 6500,    SpiriumValue = 12500},
+	{Name = "Espiritu del Abismo",         Rarity = "Demon",      EssenceRate = 8000,    SpiriumValue = 14000},
+	{Name = "Espiritu Angel",              Rarity = "Divino",     EssenceRate = 15000,   SpiriumValue = 20000},
+	{Name = "Espiritu Celestial",          Rarity = "Divino",     EssenceRate = 25000,   SpiriumValue = 28000},
+	{Name = "Espiritu del Destino",        Rarity = "Divino",     EssenceRate = 40000,   SpiriumValue = 35000},
+	{Name = "Espiritu de la Creacion",     Rarity = "Divino",     EssenceRate = 65000,   SpiriumValue = 42000},
+	{Name = "Espiritu del Universo",       Rarity = "Divino",     EssenceRate = 100000,  SpiriumValue = 50000},
+	{Name = "Espiritu Santo",              Rarity = "Especial",   EssenceRate = 2000000, SpiriumValue = 100000},
+}
+
+local function findSpiritData(spiritName)
+	for _, s in ipairs(SpiritDatabase) do
+		if s.Name:lower() == spiritName:lower() then return s end
+	end
+	return nil
+end
+
+local function spawnSpiritInBase(targetPlayer, spiritName)
+	local baseNumber = targetPlayer:GetAttribute("BaseNumber")
+	if not baseNumber then return false, "El jugador no tiene base asignada" end
+
+	-- Buscar datos del spirit
+	local spiritData = findSpiritData(spiritName)
+	if not spiritData then return false, "Spirit no encontrado: " .. spiritName end
+
+	-- Buscar modelo en ReplicatedStorage
+	local rarityFolder = SpiritTemplate:FindFirstChild(spiritData.Rarity)
+	if not rarityFolder then return false, "Carpeta de rareza no encontrada: " .. spiritData.Rarity end
+
+	local model = rarityFolder:FindFirstChild(spiritData.Name)
+	if not model then return false, "Modelo no encontrado: " .. spiritData.Name end
+
+	-- Buscar primer slot disponible
+	local base = Workspace:FindFirstChild("base" .. baseNumber)
+	if not base then return false, "Base no encontrada" end
+
+	local based = base:FindFirstChild("based")
+	if not based then return false, "Carpeta based no encontrada" end
+
+	local innerBase = based:FindFirstChild("base")
+	if not innerBase then return false, "Carpeta base interna no encontrada" end
+
+	local targetSlot = nil
+	for i = 1, 10 do
+		local slot = innerBase:FindFirstChild("slot" .. i)
+		if slot and not slot:GetAttribute("IsOccupied") then
+			targetSlot = slot
+			break
+		end
+	end
+
+	if not targetSlot then return false, "No hay slots disponibles en la base" end
+
+	-- Clonar y colocar el spirit
+	local spirit = model:Clone()
+	spirit.Name = "Spirit"
+	spirit.Position = targetSlot.Position + Vector3.new(0, 3, 0)
+	spirit.Anchored = false
+	spirit.CanCollide = true
+	spirit.Parent = Workspace
+
+	-- Atributos
+	spirit:SetAttribute("Rarity", spiritData.Rarity)
+	spirit:SetAttribute("EssenceRate", spiritData.EssenceRate)
+	spirit:SetAttribute("SpiriumValue", spiritData.SpiriumValue)
+	spirit:SetAttribute("SpiritName", spiritData.Name)
+
+	local br = Instance.new("ObjectValue")
+	br.Name = "Breaker"
+	br.Value = targetPlayer
+	br.Parent = spirit
+
+	return true, "✅ " .. spiritData.Name .. " spawneado en base " .. baseNumber .. " de " .. targetPlayer.Name
+end
+
+-- ==========================================
+-- MANEJAR COMANDOS
+-- ==========================================
+AdminCommand.OnServerEvent:Connect(function(player, command, ...)
+	if not isAdmin(player) then
+		warn("⚠️ [AdminService] Intento no autorizado de " .. player.Name)
+		return
+	end
+
+	local args = {...}
+	print("🛡️ [AdminService] Comando recibido: " .. command)
+
+	if command == "AddEsencia" then
+		local target = getTargetPlayer(args[1]) or player
+		local amount = tonumber(args[2]) or 0
+		local esencia = target.leaderstats and target.leaderstats:FindFirstChild("Esencia")
+		if esencia then
+			setEsencia(target, esencia.Value + amount)
+			AdminResponse:FireClient(player, "✅ +" .. amount .. " Esencia a " .. target.Name)
+		end
+
+	elseif command == "SetEsencia" then
+		local target = getTargetPlayer(args[1]) or player
+		local amount = tonumber(args[2]) or 0
+		if setEsencia(target, amount) then
+			AdminResponse:FireClient(player, "✅ Esencia de " .. target.Name .. " → " .. amount)
+		end
+
+	elseif command == "ZeroEsencia" then
+		local target = getTargetPlayer(args[1]) or player
+		if setEsencia(target, 0) then
+			AdminResponse:FireClient(player, "✅ Esencia de " .. target.Name .. " → 0")
+		end
+
+	elseif command == "MaxEsencia" then
+		local target = getTargetPlayer(args[1]) or player
+		if setEsencia(target, 999999999) then
+			AdminResponse:FireClient(player, "✅ Esencia de " .. target.Name .. " al maximo")
+		end
+
+	elseif command == "ResetTurret" then
+		local target = getTargetPlayer(args[1]) or player
+		local TurretStats = require(ServerScriptService:WaitForChild("TurretStats"))
+		TurretStats.Init(target)
+		DataManager.UpdateData(target, function(data)
+			data.Turret = {
+				Stats = {
+					Damage = 10, ProjectileSpeed = 450, ProjectileSize = 4,
+					FireRate = 0.15, Range = 200, CritChance = 0, MultiShot = 1,
+				},
+				Levels = {
+					Damage = 0, ProjectileSpeed = 0, ProjectileSize = 0,
+					FireRate = 0, Range = 0, CritChance = 0, MultiShot = 0,
+				}
+			}
+			return data
+		end)
+		AdminResponse:FireClient(player, "✅ Torreta de " .. target.Name .. " reiniciada")
+
+	elseif command == "SetSpeed" then
+		local target = getTargetPlayer(args[1]) or player
+		local speed = tonumber(args[2]) or 16
+		local character = target.Character
+		local humanoid = character and character:FindFirstChild("Humanoid")
+		if humanoid then
+			humanoid.WalkSpeed = speed
+			AdminResponse:FireClient(player, "✅ Velocidad de " .. target.Name .. " → " .. speed)
+		end
+
+	elseif command == "ToggleFly" then
+		AdminResponse:FireClient(player, "FlyToggle")
+
+	elseif command == "SpawnBox" then
+		local rarityName = args[1] or "Comun"
+		if _G.SpawnAdminBox then
+			_G.SpawnAdminBox(rarityName)
+			AdminResponse:FireClient(player, "✅ Caja " .. rarityName .. " spawneada")
+		end
+
+	elseif command == "ClearBoxes" then
+		for _, obj in ipairs(Workspace:GetChildren()) do
+			if obj.Name:find("Caja_") then
+				obj:Destroy()
+			end
+		end
+		AdminResponse:FireClient(player, "✅ Todas las cajas eliminadas")
+
+	elseif command == "ToggleBoxSpawner" then
+		_G.BoxSpawnerEnabled = not _G.BoxSpawnerEnabled
+		AdminResponse:FireClient(player, _G.BoxSpawnerEnabled and "✅ Spawner activado" or "✅ Spawner detenido")
+
+	elseif command == "SpawnSpirit" then
+		local target = getTargetPlayer(args[1]) or player
+		local spiritName = args[2] or ""
+		if spiritName == "" then
+			AdminResponse:FireClient(player, "❌ Escribe el nombre del Spirit")
+			return
+		end
+		local success, msg = spawnSpiritInBase(target, spiritName)
+		AdminResponse:FireClient(player, msg)
+
+	elseif command == "Kick" then
+		local target = getTargetPlayer(args[1])
+		if not target then
+			AdminResponse:FireClient(player, "❌ Jugador no encontrado")
+			return
+		end
+		if isAdmin(target) then
+			AdminResponse:FireClient(player, "❌ No puedes kickearte a ti mismo")
+			return
+		end
+		target:Kick("Fuiste expulsado del servidor por el administrador.")
+		AdminResponse:FireClient(player, "✅ " .. target.Name .. " fue kickeado")
+
+	elseif command == "Ban" then
+		local target = getTargetPlayer(args[1])
+		if not target then
+			AdminResponse:FireClient(player, "❌ Jugador no encontrado")
+			return
+		end
+		if isAdmin(target) then return end
+		target:Kick("Has sido baneado del servidor.")
+		AdminResponse:FireClient(player, "⚠️ " .. target.Name .. " kickeado (ban completo pendiente)")
+	end
+end)
+
+print("🛡️ [AdminService] Panel de administrador iniciado")
+
+2,/BaseAssigment
+
+--!strict
+-- Script: BaseAssignment (Versión Anti-Reset de Avatar)
+-- Ubicación: ServerScriptService
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local assignedBases = {}
+
+local function updatePublicCartel(baseNumber, playerName)
+	local base = Workspace:FindFirstChild("base" .. baseNumber)
+	if not base then return end
+
+	local ownerUI = base:FindFirstChild("BaseOwnerUI" .. baseNumber)
+	if not ownerUI then return end
+
+	local cartel = ownerUI:FindFirstChild("cartel")
+	if not cartel then return end
+
+	local surfaceGui = cartel:FindFirstChild("OwnerLabel") or Instance.new("SurfaceGui")
+	surfaceGui.Name = "OwnerLabel"
+	surfaceGui.Face = Enum.NormalId.Front
+	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	surfaceGui.PixelsPerStud = 25
+	surfaceGui.Parent = cartel
+
+	local textLabel = surfaceGui:FindFirstChild("TextLabel") or Instance.new("TextLabel")
+	textLabel.Name = "TextLabel"
+	textLabel.Size = UDim2.new(1, 0, 1, 0)
+	textLabel.BackgroundTransparency = 1
+	textLabel.Text = "Base de " .. playerName
+	textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	textLabel.TextScaled = true
+	textLabel.Font = Enum.Font.GothamBold
+	textLabel.TextStrokeTransparency = 0.4
+	textLabel.Parent = surfaceGui
+end
+
+-- Función interna que aplica el grupo de colisión de forma estricta
+local function applyCollisionGroup(character, baseNumber)
+	local groupName = "Owner" .. baseNumber
+	local partsCount = 0
+
+	for _, part in pairs(character:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.CollisionGroup = groupName
+			partsCount = partsCount + 1
+		end
+	end
+
+	print("👤 [BaseAssignment] ¡Éxito! " .. partsCount .. " partes de " .. character.Name .. " asignadas a " .. groupName)
+end
+
+local function setCharacterCollisionGroup(character, baseNumber)
+	-- 1. Intento inmediato al spawnear
+	applyCollisionGroup(character, baseNumber)
+
+	-- 2. SOLUCIÓN AL RESET DE ROBLOX: Volver a aplicar cuando la ropa y accesorios carguen al 100%
+	local player = Players:GetPlayerFromCharacter(character)
+	if player then
+		player.CharacterAppearanceLoaded:Connect(function(loadedCharacter)
+			applyCollisionGroup(loadedCharacter, baseNumber)
+		end)
+	end
+
+	-- 3. Escudo para herramientas que se equipen después
+	character.DescendantAdded:Connect(function(descendant)
+		if descendant:IsA("BasePart") then
+			descendant.CollisionGroup = "Owner" .. baseNumber
+		end
+	end)
+end
+
+local function assignBase(player)
+	for i = 1, 8 do
+		if not assignedBases[i] then
+			assignedBases[i] = player
+			player:SetAttribute("BaseNumber", i)
+			updatePublicCartel(i, player.DisplayName)
+			return i
+		end
+	end
+	return nil
+end
+
+local function spawnPlayer(player, baseNumber)
+	local spawnFolder = Workspace:FindFirstChild("spawns")
+	if not spawnFolder then return end
+
+	local spawn = spawnFolder:FindFirstChild("SpawnLocation" .. baseNumber)
+	if spawn and spawn:IsA("SpawnLocation") then
+		player.RespawnLocation = spawn
+	end
+end
+
+local function onPlayerAdded(player)
+	local baseNumber = assignBase(player)
+	if baseNumber then
+		spawnPlayer(player, baseNumber)
+	end
+
+	player.CharacterAdded:Connect(function(character)
+		local num = player:GetAttribute("BaseNumber")
+		if num then
+			setCharacterCollisionGroup(character, num)
+			spawnPlayer(player, num)
+		end
+	end)
+
+	if player.Character then
+		local num = player:GetAttribute("BaseNumber")
+		if num then
+			setCharacterCollisionGroup(player.Character, num)
+			spawnPlayer(player, num)
+		end
+	end
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+
+for _, player in ipairs(Players:GetPlayers()) do
+	task.spawn(onPlayerAdded, player)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	local num = player:GetAttribute("BaseNumber")
+	if num then
+		assignedBases[num] = nil
+	end
+end)
+
+print("✅ [BaseAssignment] Sincronización blindada contra el reseteo de avatares de Roblox.")
+
+3,/BaseOpener
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local BASE_PREFIX = "base"
+local FUSEBOX_NAME = "caja de fusible"
+local PROMPT_PART_NAME = "PromptPart"
+local BARRIER_NAME = "Barrier"
+
+local OPEN_TIME = 25
+local COOLDOWN_TIME = 60
+
+local OpenBaseEvent = ReplicatedStorage:WaitForChild("OpenBaseEvent")
+local StartMiniGameEvent = ReplicatedStorage:WaitForChild("StartMiniGameEvent")
+local MiniGameResultEvent = ReplicatedStorage:WaitForChild("MiniGameResultEvent")
+
+local basesData = {}
+
+-- ====================== FUNCIONES ======================
+
+local function setBarrierCollision(barrier, canCollide)
+	if not barrier then return end
+
+	-- CASO 1: Si la barrera principal es la pieza física en sí
+	if barrier:IsA("BasePart") then
+		barrier.CanCollide = canCollide
+	end
+
+	-- CASO 2: Por si acaso en el futuro metes sub-partes dentro
+	for _, part in ipairs(barrier:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.CanCollide = canCollide
+		end
+	end
+end
+
+local function setLasersVisible(lasers, visible)
+	if not lasers then return end
+	for _, laser in ipairs(lasers) do
+		if laser:IsA("BasePart") then
+			laser.Transparency = visible and 0 or 1
+			-- 🚨 CORREGIDO: Los láseres NUNCA deben tener colisión física
+			laser.CanCollide = false 
+		end
+	end
+end
+
+
+local function closeBase(baseId)
+	local data = basesData[baseId]
+	if not data then return end
+
+	setBarrierCollision(data.barrier, true)
+	setLasersVisible(data.lasers, true)
+
+	data.state = "cooldown"
+	data.openTimer = nil
+
+	OpenBaseEvent:FireAllClients(baseId, "cooldown")
+
+	data.cooldownTimer = task.delay(COOLDOWN_TIME, function()
+		data.state = "ready"
+		if data.prompt then data.prompt.Enabled = true end
+		data.cooldownTimer = nil
+	end)
+end
+
+local function startOpening(baseId)
+	local data = basesData[baseId]
+	if not data or data.state ~= "ready" then return end
+
+	data.state = "opening"
+	if data.prompt then data.prompt.Enabled = false end
+
+	setBarrierCollision(data.barrier, false)
+	setLasersVisible(data.lasers, false)
+
+	OpenBaseEvent:FireAllClients(baseId)
+
+	data.openTimer = task.delay(OPEN_TIME, function()
+		closeBase(baseId)
+	end)
+end
+
+-- ====================== CONFIGURACIÓN DE LAS 8 BASES ======================
+
+for i = 1, 8 do
+	local baseModel = workspace:FindFirstChild(BASE_PREFIX .. i)
+	if baseModel then
+		local basedFolder = baseModel:FindFirstChild("based")
+		if not basedFolder then continue end
+
+		local fuseContainer = basedFolder:FindFirstChild(FUSEBOX_NAME)
+		if not fuseContainer then continue end
+
+		local promptPart = fuseContainer:FindFirstChild(PROMPT_PART_NAME) or fuseContainer
+		local prompt = promptPart:FindFirstChildOfClass("ProximityPrompt")
+
+		local barrier = baseModel:FindFirstChild(BARRIER_NAME)
+
+		local lasers = {}
+		local innerBase = basedFolder:FindFirstChild("base")
+		if innerBase then
+			for _, obj in ipairs(innerBase:GetChildren()) do
+				if obj:IsA("BasePart") and string.lower(obj.Name):find("laser") then
+					table.insert(lasers, obj)
+				end
+			end
+		end
+
+		basesData[i] = {
+			model = baseModel,
+			prompt = prompt,
+			barrier = barrier,
+			lasers = lasers,
+			state = "ready",
+			currentHacker = nil,
+			openTimer = nil,
+			cooldownTimer = nil,
+		}
+
+		if prompt then
+			prompt.Enabled = true
+
+			prompt.Triggered:Connect(function(player)
+				local data = basesData[i]
+				if not data or data.state ~= "ready" then return end
+
+				-- =============================================
+				-- NUEVO: El dueño no puede hackear su propia base
+				-- =============================================
+				if player:GetAttribute("BaseNumber") == i then
+					return
+				end
+
+				data.currentHacker = player
+				prompt.Enabled = false
+				StartMiniGameEvent:FireClient(player, i)
+			end)
+		end
+	end
+end
+
+-- ====================== EVENTOS ======================
+
+MiniGameResultEvent.OnServerEvent:Connect(function(player, baseId, success)
+	local data = basesData[baseId]
+	if not data or data.currentHacker ~= player then return end
+	data.currentHacker = nil
+
+	if success and data.state == "ready" then
+
+		-- =============================================
+		-- NUEVO: Verificamos si la base tiene dueño
+		-- =============================================
+		local hasOwner = false
+		for _, p in pairs(Players:GetPlayers()) do
+			if p:GetAttribute("BaseNumber") == baseId then
+				hasOwner = true
+				break
+			end
+		end
+
+		if not hasOwner then
+			print("[BaseOpener] Base vacía - No se activan láseres")
+			if data.prompt then
+				data.prompt.Enabled = true
+			end
+			return
+		end
+
+		-- Si tiene dueño, abrimos normalmente
+		startOpening(baseId)
+
+	else
+		-- Falló o canceló → reactivamos el prompt
+		if data.state == "ready" and data.prompt then
+			data.prompt.Enabled = true
+		end
+	end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	for _, data in pairs(basesData) do
+		if data.currentHacker == player then
+			data.currentHacker = nil
+			if data.state == "ready" and data.prompt then
+				data.prompt.Enabled = true
+			end
+		end
+	end
+end)
+
+print("[BaseOpener] Sistema iniciado correctamente (con restricción de dueño)")
+
+4./BaseSecurity
+
+--!strict
+-- Script: BaseSecurity (Versión Definitiva Arreglada)
+-- Ubicación: ServerScriptService
+local Workspace = game:GetService("Workspace")
+local PhysicsService = game:GetService("PhysicsService")
+
+print("⚙️ [BaseSecurity] Configurando matriz de colisiones...")
+
+-- ========================================================
+-- GENERAR MATRIZ DE GRUPOS DE COLISIÓN (1 al 8)
+-- ========================================================
+for i = 1, 8 do
+	local barrierGroupName = "Barrier" .. i
+	local ownerGroupName = "Owner" .. i
+
+	pcall(function() PhysicsService:RegisterCollisionGroup(barrierGroupName) end)
+	pcall(function() PhysicsService:RegisterCollisionGroup(ownerGroupName) end)
+
+	-- REGLA MAESTRA: El dueño de la base 'i' NO choca con la barrera de la base 'i'
+	PhysicsService:CollisionGroupSetCollidable(ownerGroupName, barrierGroupName, false)
+end
+
+-- ========================================================
+-- ASIGNAR LAS BARRERAS FÍSICAS A SUS GRUPOS (CORREGIDO)
+-- ========================================================
+for i = 1, 8 do
+	local baseModel = Workspace:FindFirstChild("base" .. i) or Workspace:FindFirstChild("Base" .. i)
+	if baseModel then
+		local barrier = baseModel:FindFirstChild("Barrier") or baseModel:FindFirstChild("barrier")
+		if barrier then
+			local groupName = "Barrier" .. i
+
+			-- CASO 1: Si la Barrera es un solo bloque físico directo (Part, MeshPart, etc.)
+			if barrier:IsA("BasePart") then
+				barrier.CollisionGroup = groupName
+				barrier.CanCollide = true
+			end
+
+			-- CASO 2: Si la Barrera es un Modelo o Carpeta con sub-partes adentro
+			for _, part in ipairs(barrier:GetDescendants()) do
+				if part:IsA("BasePart") then
+					part.CollisionGroup = groupName
+					part.CanCollide = true
+				end
+			end
+		end
+	end
+end
+
+print("✅ [BaseSecurity] ¡Matriz y Barreras físicas sincronizadas con éxito!")
+
+5./BoxSpawner
+
+--!strict
+-- Ubicación: ServerScriptService -> BoxSpawner (Reemplaza todo tu script actual por este)
+
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Debris = game:GetService("Debris")
+local ServerScriptService = game:GetService("ServerScriptService")
+local SpeedManager = require(ServerScriptService:WaitForChild("SpeedManager"))
+local SpiritUtils = require(ServerScriptService:WaitForChild("SpiritUtils"))
+
+local SPAWN_INTERVAL = 8
+local SPAWN_HEIGHT = 750
+
+_G.BoxSpawnerEnabled = true
+
+local showDamage = ReplicatedStorage:FindFirstChild("ShowDamage")
+if not showDamage then
+	showDamage = Instance.new("RemoteEvent")
+	showDamage.Name = "ShowDamage"
+	showDamage.Parent = ReplicatedStorage
+end
+
+local CratesFolder = ReplicatedStorage:WaitForChild("Crates")
+local SpiritTemplate = ReplicatedStorage:WaitForChild("SpiritTemplate")
+
+local SpiritDatabase = {
+	{Name = "Espiritu de Tierra",          Rarity = "Comun",      EssenceRate = 1,       SpiriumValue = 5},
+	{Name = "Espiritu de Brisa",           Rarity = "Comun",      EssenceRate = 2,       SpiriumValue = 8},
+	{Name = "Espiritu de Gota",            Rarity = "Comun",      EssenceRate = 3,       SpiriumValue = 10},
+	{Name = "Espiritu de Musgo",           Rarity = "Comun",      EssenceRate = 4,       SpiriumValue = 12},
+	{Name = "Espiritu de Chispa",          Rarity = "Comun",      EssenceRate = 5,       SpiriumValue = 15},
+	{Name = "Espiritu de Arena",           Rarity = "Poco Comun", EssenceRate = 8,       SpiriumValue = 30},
+	{Name = "Espiritu de Hielo",           Rarity = "Poco Comun", EssenceRate = 11,      SpiriumValue = 45},
+	{Name = "Espiritu de Fuego",           Rarity = "Poco Comun", EssenceRate = 14,      SpiriumValue = 60},
+	{Name = "Espiritu de Cristal",         Rarity = "Poco Comun", EssenceRate = 17,      SpiriumValue = 75},
+	{Name = "Espiritu de Trueno",          Rarity = "Poco Comun", EssenceRate = 20,      SpiriumValue = 90},
+	{Name = "Espiritu del Bosque",         Rarity = "Raro",       EssenceRate = 30,      SpiriumValue = 150},
+	{Name = "Espiritu Marino",             Rarity = "Raro",       EssenceRate = 38,      SpiriumValue = 180},
+	{Name = "Espiritu de Luna",            Rarity = "Raro",       EssenceRate = 47,      SpiriumValue = 220},
+	{Name = "Espiritu de Sombra",          Rarity = "Raro",       EssenceRate = 56,      SpiriumValue = 260},
+	{Name = "Espiritu del Viento Supremo", Rarity = "Raro",       EssenceRate = 65,      SpiriumValue = 300},
+	{Name = "Espiritu Fantasma",           Rarity = "Epico",      EssenceRate = 90,      SpiriumValue = 450},
+	{Name = "Espiritu Arcano",             Rarity = "Epico",      EssenceRate = 110,     SpiriumValue = 550},
+	{Name = "Espiritu de Magma",           Rarity = "Epico",      EssenceRate = 135,     SpiriumValue = 680},
+	{Name = "Espiritu de Tormenta",        Rarity = "Epico",      EssenceRate = 160,     SpiriumValue = 800},
+	{Name = "Espiritu del Vacio",          Rarity = "Epico",      EssenceRate = 180,     SpiriumValue = 900},
+	{Name = "Espiritu de la Vida",         Rarity = "Legendario", EssenceRate = 250,     SpiriumValue = 1200},
+	{Name = "Espiritu de la Estrella",     Rarity = "Legendario", EssenceRate = 320,     SpiriumValue = 1500},
+	{Name = "Espiritu del Sol",            Rarity = "Legendario", EssenceRate = 400,     SpiriumValue = 1800},
+	{Name = "Espiritu del Tiempo",         Rarity = "Legendario", EssenceRate = 470,     SpiriumValue = 2100},
+	{Name = "Espiritu del Dragon",         Rarity = "Legendario", EssenceRate = 550,     SpiriumValue = 2500},
+	{Name = "Espiritu del Caos",           Rarity = "Mitico",     EssenceRate = 800,     SpiriumValue = 3500},
+	{Name = "Espiritu del Juicio",         Rarity = "Mitico",     EssenceRate = 1000,    SpiriumValue = 4200},
+	{Name = "Espiritu de la Muerte",       Rarity = "Mitico",     EssenceRate = 1300,    SpiriumValue = 5000},
+	{Name = "Espiritu de la Dimension",    Rarity = "Mitico",     EssenceRate = 1650,    SpiriumValue = 5800},
+	{Name = "Espiritu del Infinito",       Rarity = "Mitico",     EssenceRate = 2000,    SpiriumValue = 6500},
+	{Name = "Espiritu Demonio",            Rarity = "Demon",      EssenceRate = 3000,    SpiriumValue = 8000},
+	{Name = "Espiritu de la Perdicion",    Rarity = "Demon",      EssenceRate = 4000,    SpiriumValue = 9500},
+	{Name = "Espiritu de la Pesadilla",    Rarity = "Demon",      EssenceRate = 5200,    SpiriumValue = 11000},
+	{Name = "Espiritu Infernal",           Rarity = "Demon",      EssenceRate = 6500,    SpiriumValue = 12500},
+	{Name = "Espiritu del Abismo",         Rarity = "Demon",      EssenceRate = 8000,    SpiriumValue = 14000},
+	{Name = "Espiritu Angel",              Rarity = "Divino",     EssenceRate = 15000,   SpiriumValue = 20000},
+	{Name = "Espiritu Celestial",          Rarity = "Divino",     EssenceRate = 25000,   SpiriumValue = 28000},
+	{Name = "Espiritu del Destino",        Rarity = "Divino",     EssenceRate = 40000,   SpiriumValue = 35000},
+	{Name = "Espiritu de la Creacion",     Rarity = "Divino",     EssenceRate = 65000,   SpiriumValue = 42000},
+	{Name = "Espiritu del Universo",       Rarity = "Divino",     EssenceRate = 100000,  SpiriumValue = 50000},
+	{Name = "Espiritu Santo",              Rarity = "Especial",   EssenceRate = 2000000, SpiriumValue = 100000},
+}
+
+local RarityWeights = {
+	["Comun"]      = {["Espiritu de Tierra"] = 30, ["Espiritu de Brisa"] = 25, ["Espiritu de Gota"] = 20, ["Espiritu de Musgo"] = 15, ["Espiritu de Chispa"] = 10},
+	["Poco Comun"] = {["Espiritu de Arena"] = 25, ["Espiritu de Hielo"] = 22, ["Espiritu de Fuego"] = 20, ["Espiritu de Cristal"] = 18, ["Espiritu de Trueno"] = 15},
+	["Raro"]       = {["Espiritu del Bosque"] = 25, ["Espiritu Marino"] = 22, ["Espiritu de Luna"] = 20, ["Espiritu de Sombra"] = 18, ["Espiritu del Viento Supremo"] = 15},
+	["Epico"]      = {["Espiritu Fantasma"] = 25, ["Espiritu Arcano"] = 22, ["Espiritu de Magma"] = 20, ["Espiritu de Tormenta"] = 18, ["Espiritu del Vacio"] = 15},
+	["Legendario"] = {["Espiritu de la Vida"] = 25, ["Espiritu de la Estrella"] = 22, ["Espiritu del Sol"] = 20, ["Espiritu del Tiempo"] = 18, ["Espiritu del Dragon"] = 15},
+	["Mitico"]     = {["Espiritu del Caos"] = 25, ["Espiritu del Juicio"] = 22, ["Espiritu de la Muerte"] = 20, ["Espiritu de la Dimension"] = 18, ["Espiritu del Infinito"] = 15},
+	["Demon"]      = {["Espiritu Demonio"] = 25, ["Espiritu de la Perdicion"] = 22, ["Espiritu de la Pesadilla"] = 20, ["Espiritu Infernal"] = 18, ["Espiritu del Abismo"] = 15},
+	["Divino"]     = {["Espiritu Angel"] = 25, ["Espiritu Celestial"] = 22, ["Espiritu del Destino"] = 20, ["Espiritu de la Creacion"] = 18, ["Espiritu del Universo"] = 15},
+}
+
+local RarityTable = {
+	{Name = "Comun",      Chance = 55,    BoxHealth = 100,      RarityKey = "Comun"},
+	{Name = "Poco Comun", Chance = 28,    BoxHealth = 250,      RarityKey = "Poco Comun"},
+	{Name = "Raro",       Chance = 12,    BoxHealth = 600,      RarityKey = "Raro"},
+	{Name = "Epico",      Chance = 4,     BoxHealth = 1500,     RarityKey = "Epico"},
+	{Name = "Legendario", Chance = 0.85,  BoxHealth = 4000,     RarityKey = "Legendario"},
+	{Name = "Mitico",     Chance = 0.14,  BoxHealth = 12000,    RarityKey = "Mitico"},
+	{Name = "Demon",      Chance = 0.005, BoxHealth = 25000,    RarityKey = "Demon"},
+	{Name = "Divino",     Chance = 0.001, BoxHealth = 35000,    RarityKey = "Divino"},
+}
+
+local RarityColors = {
+	["Comun"]      = Color3.fromRGB(200, 200, 200),
+	["Poco Comun"] = Color3.fromRGB(80, 200, 80),
+	["Raro"]       = Color3.fromRGB(80, 140, 255),
+	["Epico"]      = Color3.fromRGB(180, 80, 255),
+	["Legendario"] = Color3.fromRGB(255, 200, 50),
+	["Mitico"]     = Color3.fromRGB(255, 80, 80),
+	["Demon"]      = Color3.fromRGB(200, 50, 50),
+	["Divino"]     = Color3.fromRGB(255, 220, 100),
+	["Especial"]   = Color3.fromRGB(255, 255, 255),
+}
+
+-- ========================================================
+-- ⭐ NUEVA FUNCIÓN: GENERADOR DE INTERFAZ DE CAJA (UI)
+-- ========================================================
+local function createBoxBillboard(box: Part, rarityName: string, maxHealth: number)
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "CrateInfo"
+	-- Hacemos el tamaño fijo en píxeles (Offset) y mucho más compacto (140x50)
+	billboard.Size = UDim2.new(0, 140, 0, 50) 
+	billboard.StudsOffset = Vector3.new(0, 7, 0) -- Un poco más arriba para que no bloquee la base
+	billboard.AlwaysOnTop = true
+	-- IMPORTANTE: Limitamos la distancia (MaxDistance) para que no se vean desde el otro lado del mapa
+	billboard.MaxDistance = 60 
+	billboard.Parent = box
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 1, 0)
+	frame.BackgroundTransparency = 1
+	frame.Parent = billboard
+
+	-- Título (Caja Rara)
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Size = UDim2.new(1, 0, 0, 20)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Text = rarityName == "Especial" and "⭐ ???" or "⭐ " .. rarityName
+	titleLabel.TextColor3 = RarityColors[rarityName] or Color3.fromRGB(255, 255, 255)
+	titleLabel.TextScaled = true
+	titleLabel.Font = Enum.Font.GothamBold
+	titleLabel.TextStrokeTransparency = 0.4
+	titleLabel.Parent = frame
+
+	-- Vida
+	local healthLabel = Instance.new("TextLabel")
+	healthLabel.Name = "HealthLabel"
+	healthLabel.Size = UDim2.new(1, 0, 0, 15)
+	healthLabel.Position = UDim2.new(0, 0, 0, 20)
+	healthLabel.BackgroundTransparency = 1
+	healthLabel.Text = "❤️ " .. maxHealth
+	healthLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	healthLabel.TextScaled = true
+	healthLabel.Font = Enum.Font.GothamMedium
+	healthLabel.TextStrokeTransparency = 0.4
+	healthLabel.Parent = frame
+
+	-- Temporizador
+	local timerLabel = Instance.new("TextLabel")
+	timerLabel.Name = "TimerLabel"
+	timerLabel.Size = UDim2.new(1, 0, 0, 15)
+	timerLabel.Position = UDim2.new(0, 0, 0, 35)
+	timerLabel.BackgroundTransparency = 1
+	timerLabel.Text = "⏳ ..."
+	timerLabel.TextColor3 = Color3.fromRGB(255, 150, 150)
+	timerLabel.TextScaled = true
+	timerLabel.Font = Enum.Font.Gotham
+	timerLabel.TextStrokeTransparency = 0.5
+	timerLabel.Parent = frame
+
+	local healthValue = box:WaitForChild("Health")
+	healthValue.Changed:Connect(function(newHealth)
+		if healthLabel and box and box.Parent then
+			healthLabel.Text = "❤️ " .. math.max(0, newHealth)
+		end
+	end)
+end
+
+local function getRandomRarity()
+	if math.random(1, 100000000) == 1 then
+		return {Name = "Especial", BoxHealth = 10000000, RarityKey = "Especial"}
+	end
+	local total = 0
+	for _, r in ipairs(RarityTable) do total += r.Chance end
+	local roll = math.random() * total
+	local sum = 0
+	for _, rarity in ipairs(RarityTable) do
+		sum += rarity.Chance
+		if roll <= sum then return rarity end
+	end
+	return RarityTable[1]
+end
+
+local function getRandomSpirit(rarityKey)
+	if rarityKey == "Especial" then
+		for _, s in ipairs(SpiritDatabase) do
+			if s.Name == "Espiritu Santo" then return s end
+		end
+	end
+	local weights = RarityWeights[rarityKey]
+	if not weights then return nil end
+	local total = 0
+	for _, w in pairs(weights) do total += w end
+	local roll = math.random() * total
+	local sum = 0
+	for name, weight in pairs(weights) do
+		sum += weight
+		if roll <= sum then
+			for _, spirit in ipairs(SpiritDatabase) do
+				if spirit.Name == name then return spirit end
+			end
+		end
+	end
+	for _, spirit in ipairs(SpiritDatabase) do
+		if spirit.Rarity == rarityKey then return spirit end
+	end
+	return nil
+end
+
+local function getSpiritModel(rarityKey, spiritName)
+	local rarityFolder = SpiritTemplate:FindFirstChild(rarityKey)
+	if not rarityFolder then
+		warn("[BoxSpawner] No se encontro la carpeta de rareza: " .. rarityKey)
+		return nil
+	end
+	local model = rarityFolder:FindFirstChild(spiritName)
+	if not model then
+		warn("[BoxSpawner] No se encontro el spirit: " .. spiritName)
+		return nil
+	end
+	return model:Clone()
+end
+
+local function getCrateModel(rarityKey)
+	local model = CratesFolder:FindFirstChild(rarityKey)
+	if not model then
+		warn("[BoxSpawner] No se encontro el crate: " .. rarityKey)
+		return nil
+	end
+	return model:Clone()
+end
+
+local function createBillboard(part, spiritData)
+	_G.CreateSpiritBillboard = createBillboard
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "SpiritInfo"
+	billboard.Size = UDim2.new(0, 220, 0, 75)
+	billboard.StudsOffset = Vector3.new(0, 3.8, 0)
+	billboard.AlwaysOnTop = true
+	billboard.MaxDistance = 80
+	billboard.Parent = part
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.new(1, 0, 0, 32)
+	nameLabel.Position = UDim2.new(0, 0, 0, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = spiritData.Name
+	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.TextScaled = true
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextStrokeTransparency = 0.4
+	nameLabel.Parent = billboard
+
+	local rarityLabel = Instance.new("TextLabel")
+	rarityLabel.Size = UDim2.new(1, 0, 0, 18)
+	rarityLabel.Position = UDim2.new(0, 0, 0, 30)
+	rarityLabel.BackgroundTransparency = 1
+	rarityLabel.Text = spiritData.Rarity == "Especial" and "???" or spiritData.Rarity
+	rarityLabel.TextColor3 = RarityColors[spiritData.Rarity] or Color3.fromRGB(255, 255, 255)
+	rarityLabel.TextScaled = true
+	rarityLabel.Font = Enum.Font.Gotham
+	rarityLabel.TextStrokeTransparency = 0.5
+	rarityLabel.Parent = billboard
+
+	local genLabel = Instance.new("TextLabel")
+	genLabel.Size = UDim2.new(1, 0, 0, 16)
+	genLabel.Position = UDim2.new(0, 0, 0, 48)
+	genLabel.BackgroundTransparency = 1
+	genLabel.Text = "+" .. spiritData.EssenceRate .. " Es/s"
+	genLabel.TextColor3 = Color3.fromRGB(170, 255, 170)
+	genLabel.TextScaled = true
+	genLabel.Font = Enum.Font.Gotham
+	genLabel.TextStrokeTransparency = 0.5
+	genLabel.Parent = billboard
+end
+
+local function CreateCrater(landingPosition, box)
+	local colors = {
+		Color3.fromRGB(120, 80, 50),
+		Color3.fromRGB(100, 70, 45),
+		Color3.fromRGB(90, 60, 40),
+	}
+	for i = 1, 10 do
+		local cube = Instance.new("Part")
+		cube.Size = Vector3.new(math.random(5,10)/10, math.random(5,10)/10, math.random(5,10)/10)
+		cube.Color = colors[math.random(1, #colors)]
+		cube.Material = Enum.Material.SmoothPlastic
+		cube.Anchored = false
+		cube.CanCollide = false
+		local angle = (i/10) * math.pi * 2 + math.random() * 0.3
+		local dist = math.random(55, 75) / 10
+		cube.Position = landingPosition + Vector3.new(math.cos(angle)*dist, 0.5, math.sin(angle)*dist)
+		cube.Parent = Workspace
+		local bv = Instance.new("BodyVelocity")
+		bv.MaxForce = Vector3.new(4000, 4000, 4000)
+		bv.Velocity = Vector3.new(math.cos(angle)*math.random(8,14), math.random(8,16), math.sin(angle)*math.random(8,14))
+		bv.Parent = cube
+		Debris:AddItem(cube, 2)
+	end
+	for i = 1, 14 do
+		local cube = Instance.new("Part")
+		cube.Size = Vector3.new(math.random(30,60)/8, math.random(12,20)/8, math.random(30,60)/8)
+		cube.Color = colors[math.random(1, #colors)]
+		cube.Material = Enum.Material.SmoothPlastic
+		cube.Anchored = true
+		cube.CanCollide = false
+		cube.CastShadow = false
+		local angle = (i/14) * math.pi * 2 + math.random() * 0.3
+		local dist = math.random(55, 75) / 10
+		cube.Position = landingPosition + Vector3.new(math.cos(angle)*dist, -2, math.sin(angle)*dist)
+		cube.Parent = box
+	end
+end
+
+_G.ScheduleSpiritDestroy = function(spr)
+	task.delay(90, function()
+		if not spr or not spr.Parent then return end
+		if spr:GetAttribute("SpiritState") == "World" then
+			spr:Destroy()
+			print("[BoxSpawner] Spirit destruido por timeout")
+		end
+	end)
+end
+
+local function spawnBox(forcedRarity)
+	local rarity = forcedRarity or getRandomRarity()
+
+	local spawnFolder = Workspace:FindFirstChild("SpawnArea")
+	if not spawnFolder then return end
+	local centerPart = spawnFolder:FindFirstChild("SpawnCenter")
+	if not centerPart or not centerPart:FindFirstChild("Radius") then return end
+
+	local centerPos = centerPart.Position
+	local radius = centerPart.Radius.Value
+	local angle = math.random() * math.pi * 2
+	local dist = math.random() * radius
+	local spawnPos = Vector3.new(
+		centerPos.X + math.cos(angle) * dist,
+		SPAWN_HEIGHT,
+		centerPos.Z + math.sin(angle) * dist
+	)
+
+	local box = getCrateModel(rarity.Name)
+	if not box then
+		box = Instance.new("Part")
+		box.Size = Vector3.new(12, 12, 12) -- Ajustado al estándar de Tom Studios™
+		box.Material = Enum.Material.Neon
+	end
+
+	box.Name = "Caja_" .. rarity.Name
+	box.Position = spawnPos
+	box.Anchored = false
+	box.CanCollide = true
+	box.Parent = Workspace
+
+	local health = Instance.new("IntValue")
+	health.Name = "Health"
+	health.Value = rarity.BoxHealth
+	health.Parent = box
+
+	local breaker = Instance.new("ObjectValue")
+	breaker.Name = "Breaker"
+	breaker.Value = nil
+	breaker.Parent = box
+
+	local bv = Instance.new("BodyVelocity")
+	bv.MaxForce = Vector3.new(0, math.huge, 0)
+	bv.Velocity = Vector3.new(0, -28, 0)
+	bv.Parent = box
+
+	-- Iniciar la creación de la interfaz de la caja
+	createBoxBillboard(box, rarity.Name, rarity.BoxHealth)
+
+	local landed = false
+	box.Touched:Connect(function()
+		if landed then return end
+		if box.Position.Y < 56.3 then
+			landed = true
+			if bv and bv.Parent then bv:Destroy() end
+			box.Anchored = true
+			box.Velocity = Vector3.zero
+			box.Position = Vector3.new(box.Position.X, 52.5, box.Position.Z)
+			CreateCrater(box.Position, box)
+
+			-- ⏳ Temporizador en tiempo real exclusivo al aterrizar
+			task.spawn(function()
+				local info = box:FindFirstChild("CrateInfo")
+				local timerLabel = info and info.Frame:FindFirstChild("TimerLabel")
+				for seconds = 60, 0, -1 do
+					if not box or not box.Parent then break end
+					if timerLabel then
+						timerLabel.Text = "⏳ Desaparece en: " .. seconds .. "s"
+					end
+					task.wait(1)
+				end
+			end)
+
+			task.delay(60, function()
+				if box and box.Parent then box:Destroy() end
+			end)
+		end
+	end)
+end
+
+task.spawn(function()
+	while true do
+		task.wait(SPAWN_INTERVAL)
+		if _G.BoxSpawnerEnabled then spawnBox() end
+	end
+end)
+
+_G.SpawnAdminBox = function(rarityName)
+	for _, r in ipairs(RarityTable) do
+		if r.Name == rarityName then
+			spawnBox(r)
+			return
+		end
+	end
+	if rarityName == "Especial" then
+		spawnBox({Name = "Especial", BoxHealth = 10000000, RarityKey = "Especial"})
+		return
+	end
+	spawnBox()
+end
+
+-- ==========================================
+-- DAMAGE BOX + SPAWN DE SPIRIT
+-- ==========================================
+_G.DamageBox = function(box, damage, playerWhoShot)
+	if not box or not box:FindFirstChild("Health") then return end
+
+	local health = box.Health
+	health.Value -= damage
+
+	if playerWhoShot then
+		local breaker = box:FindFirstChild("Breaker")
+		if breaker then breaker.Value = playerWhoShot end
+		if showDamage then showDamage:FireClient(playerWhoShot, damage, box.Position) end
+	end
+
+	if health.Value <= 0 then
+		local pos = box.Position
+		local breakerValue = box:FindFirstChild("Breaker") and box.Breaker.Value
+		local rarityKey = box.Name:gsub("Caja_", "")
+
+		box:Destroy()
+
+		-- ========================================================
+		-- ⭐ ENLACE AL SPEEDMANAGER: APLICAR BOOST AL ROMPER CAJA
+		-- ========================================================
+		if playerWhoShot and playerWhoShot.Character then
+			local character = playerWhoShot.Character
+
+			-- Le ponemos el atributo que lee tu SpeedManager (asumo que es "TurretBoost" o similar)
+			character:SetAttribute("TurretBoost", true) 
+			SpeedManager.UpdateSpeed(playerWhoShot)
+
+			-- Quitar el boost automáticamente después de unos segundos (ej. 4 segundos)
+			task.delay(4, function()
+				if playerWhoShot and character and character.Parent then
+					character:SetAttribute("TurretBoost", nil)
+					SpeedManager.UpdateSpeed(playerWhoShot) -- Volver a actualizar para regresar a 22
+				end
+			end)
+		end
+		-- ========================================================
+
+		local spiritData = getRandomSpirit(rarityKey)
+		if not spiritData then
+			warn("[BoxSpawner] No se pudo elegir spirit para rareza: " .. rarityKey)
+			return
+		end
+
+		local spirit = getSpiritModel(spiritData.Rarity, spiritData.Name)
+		if not spirit then
+			spirit = Instance.new("Part")
+			spirit.Shape = Enum.PartType.Ball
+			spirit.Size = Vector3.new(3, 3, 3)
+			spirit.Material = Enum.Material.Neon
+		end
+
+		spirit.Name = "Spirit"
+
+		SpiritUtils.SetupSpirit(spirit)
+		SpiritUtils.SetPosition(spirit, pos)
+		SpiritUtils.SetAnchored(spirit, false)
+		SpiritUtils.SetCanCollide(spirit, false)
+		spirit.Parent = Workspace
+
+		spirit:SetAttribute("Rarity", spiritData.Rarity)
+		spirit:SetAttribute("EssenceRate", spiritData.EssenceRate)
+		spirit:SetAttribute("SpiriumValue", spiritData.SpiriumValue)
+		spirit:SetAttribute("SpiritName", spiritData.Name)
+		spirit:SetAttribute("SpiritState", "World")
+
+		local br = Instance.new("ObjectValue")
+		br.Name = "Breaker"
+		br.Value = breakerValue
+		br.Parent = spirit
+
+		local primary = SpiritUtils.GetPrimaryPart(spirit)
+		local bv = Instance.new("BodyVelocity")
+		bv.MaxForce = Vector3.new(0, math.huge, 0)
+		bv.Velocity = Vector3.new(0, -35, 0)
+		bv.Parent = primary or spirit
+
+		createBillboard(spirit, spiritData)
+		_G.ScheduleSpiritDestroy(spirit)
+
+		local spiritLanded = false
+		local primaryPart = SpiritUtils.GetPrimaryPart(spirit)
+		if primaryPart then
+			primaryPart.Touched:Connect(function()
+				if spiritLanded then return end
+				if primaryPart.Position.Y < 56 then
+					spiritLanded = true
+					if bv and bv.Parent then bv:Destroy() end
+					SpiritUtils.SetAnchored(spirit, true)
+					local currentPos = primaryPart.Position
+					SpiritUtils.SetPosition(spirit, Vector3.new(currentPos.X, 54, currentPos.Z))
+				end
+			end)
+		end
+	end
+end
+
+print("✅ [BoxSpawner] Sistema de cajas y espíritus inicializado correctamente.")
+
+6./BoxUIManager
+
+-- Script: BoxUIManager
+-- Ubicación: ServerScriptService
+
+local CollectionService = game:GetService("CollectionService")
+
+local RarityColors = {
+	["Comun"] = Color3.fromRGB(200, 200, 200),
+	["PocoComun"] = Color3.fromRGB(75, 255, 75),
+	["Rara"] = Color3.fromRGB(75, 75, 255),
+	["Epica"] = Color3.fromRGB(170, 0, 255),
+	["Legendaria"] = Color3.fromRGB(255, 215, 0),
+	["Mitica"] = Color3.fromRGB(255, 50, 50),
+}
+
+-- Función para crear la UI cuando nace una caja
+local function setupBoxUI(box)
+	if box:FindFirstChild("BillboardGui") then return end
+
+	local rarity = box:GetAttribute("Rarity") or "Comun"
+	local color = RarityColors[rarity] or Color3.new(1, 1, 1)
+
+	local bill = Instance.new("BillboardGui", box)
+	bill.Size = UDim2.new(0, 200, 0, 100)
+	bill.StudsOffset = Vector3.new(0, 8, 0)
+	bill.AlwaysOnTop = true
+
+	local frame = Instance.new("Frame", bill)
+	frame.Size = UDim2.new(1, 0, 1, 0)
+	frame.BackgroundTransparency = 1
+
+	local title = Instance.new("TextLabel", frame)
+	title.Size = UDim2.new(1, 0, 0.3, 0)
+	title.Text = "⭐ Caja " .. rarity
+	title.TextColor3 = color
+	title.Font = Enum.Font.GothamBold
+	title.TextScaled = true
+	title.BackgroundTransparency = 1
+
+	local healthText = Instance.new("TextLabel", frame)
+	healthText.Size = UDim2.new(1, 0, 0.3, 0)
+	healthText.Position = UDim2.new(0, 0, 0.3, 0)
+	healthText.Name = "HealthLabel"
+	healthText.TextColor3 = Color3.new(1, 1, 1)
+	healthText.Font = Enum.Font.Gotham
+	healthText.TextScaled = true
+	healthText.BackgroundTransparency = 1
+
+	local timerText = Instance.new("TextLabel", frame)
+	timerText.Size = UDim2.new(1, 0, 0.3, 0)
+	timerText.Position = UDim2.new(0, 0, 0.6, 0)
+	timerText.Name = "TimerLabel"
+	timerText.TextColor3 = Color3.fromRGB(255, 100, 100)
+	timerText.Font = Enum.Font.GothamBold
+	timerText.TextScaled = true
+	timerText.BackgroundTransparency = 1
+end
+
+-- Bucle principal: Actualiza vida y timer cada 1 segundo
+task.spawn(function()
+	while true do
+		for _, box in pairs(CollectionService:GetTagged("Caja")) do
+			local ui = box:FindFirstChild("BillboardGui")
+			if ui then
+				-- Actualizar Vida
+				local currentHealth = box:GetAttribute("Health")
+				local maxHealth = box:GetAttribute("MaxHealth")
+				ui.Frame.HealthLabel.Text = "❤️ " .. currentHealth .. "/" .. maxHealth
+
+				-- Actualizar Timer
+				local expireTime = box:GetAttribute("ExpireTime")
+				local remaining = math.max(0, math.floor(expireTime - os.time()))
+				ui.Frame.TimerLabel.Text = "⏳ " .. remaining .. "s"
+			end
+		end
+		task.wait(1)
+	end
+end)
+
+-- Cuando se detecta una nueva caja (si usas CollectionService en tu Spawner)
+CollectionService:GetInstanceAddedSignal("Caja"):Connect(setupBoxUI)
+
+7./CollisionSetup
+
+local PhysicsService = game:GetService("PhysicsService")
+
+-- Crear los grupos si no existen
+local function createGroup(name)
+	local success, _ = pcall(function()
+		PhysicsService:RegisterCollisionGroup(name)
+	end)
+end
+
+createGroup("BaseOwners")
+createGroup("BaseBarriers")
+
+-- Hacer que BaseOwners NO choque con BaseBarriers
+PhysicsService:CollisionGroupSetCollidable("BaseOwners", "BaseBarriers", false)
+
+print("✅ Grupos de colisión configurados correctamente")
+
+8./DataStoreSetup
+
+--!strict
+-- Script: DataStoreSetup
+-- Ubicación: ServerScriptService
+
+local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local DataManager = require(ServerScriptService:WaitForChild("DataManager"))
+
+-- Cuando un jugador entra al juego
+Players.PlayerAdded:Connect(function(player)
+	local data = DataManager.LoadData(player)
+
+	-- Conexión con Leaderstats (Esencia)
+	local leaderstats = player:WaitForChild("leaderstats", 5)
+	if leaderstats then
+		local esencia = leaderstats:FindFirstChild("Esencia")
+		if esencia then
+			esencia.Value = data.Esencia
+
+			-- Sincronizar cambios del leaderstats con DataManager
+			esencia.Changed:Connect(function(newValue)
+				DataManager.UpdateData(player, function(currentData)
+					currentData.Esencia = newValue
+					return currentData
+				end)
+			end)
+		end
+	end
+end)
+
+-- Cuando un jugador sale del juego
+Players.PlayerRemoving:Connect(function(player)
+	DataManager.UnloadPlayer(player)
+end)
+
+-- Seguridad por si el servidor se cierra de golpe (Studio o crash)
+game:BindToClose(function()
+	print("🚨 [DataStoreSetup] Servidor cerrándose. Guardando datos de todos los jugadores...")
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		task.spawn(function()
+			DataManager.SaveData(player)
+		end)
+	end
+
+	task.wait(3) -- Dar tiempo para que terminen los guardados
+end)
+
+print("✅ [DataStoreSetup] Sistema de guardado inicializado correctamente")
+
+9./EssenceCollection
+
+--!strict
+-- EssenceCollection (con sonido)
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Sonido de dinero (puedes cambiar el ID después)
+local COLLECT_SOUND_ID = "rbxassetid://98484767246085"
+
+local function playCollectSound(player: Player, amount: number)
+	local character = player.Character
+	if not character then return end
+
+	local sound = Instance.new("Sound")
+	sound.SoundId = COLLECT_SOUND_ID
+	sound.Volume = 0.5
+	sound.PlayOnRemove = true
+	sound.Parent = character:FindFirstChild("HumanoidRootPart") or character
+	sound:Destroy() -- Se reproduce y se destruye solo
+end
+
+local function setupCollection(baseNum: number, platform: BasePart)
+	local slotNum = tonumber(string.match(platform.Name, "%d+"))
+	if not slotNum then return end
+
+	local base = Workspace:FindFirstChild("base" .. baseNum)
+	if not base then return end
+
+	local slotFolder = base:FindFirstChild("based") and base.based:FindFirstChild("base")
+	local slot = slotFolder and slotFolder:FindFirstChild("slot" .. slotNum)
+	if not slot then return end
+
+	platform.Touched:Connect(function(hit)
+		local character = hit.Parent
+		local player = Players:GetPlayerFromCharacter(character)
+		if not player then return end
+
+		if player:GetAttribute("BaseNumber") ~= baseNum then return end
+
+		local spirit = slot:FindFirstChild("Spirit")
+		if not spirit then return end
+
+		local accumulated = spirit:GetAttribute("AccumulatedEssence") or 0
+		if accumulated <= 0 then return end
+
+		-- Dar Esencia
+		local leaderstats = player:FindFirstChild("leaderstats")
+		local esenciaStat = leaderstats and leaderstats:FindFirstChild("Esencia")
+		if esenciaStat then
+			esenciaStat.Value += accumulated
+		end
+
+		-- Reproducir sonido
+		playCollectSound(player, accumulated)
+
+		-- Resetear
+		spirit:SetAttribute("AccumulatedEssence", 0)
+
+		print("[Essence] " .. player.Name .. " recogió " .. accumulated .. " Esencia")
+	end)
+end
+
+-- Configurar todas las plataformas
+for baseNum = 1, 8 do
+	local base = Workspace:FindFirstChild("base" .. baseNum)
+	if base then
+		for _, obj in ipairs(base:GetDescendants()) do
+			if obj:IsA("BasePart") and string.match(obj.Name, "^EssencePlatform%d+$") then
+				setupCollection(baseNum, obj)
+			end
+		end
+	end
+end
+
+10./EssenceGenerator
+
+--!strict
+-- EssenceGenerator
+-- Genera Esencia cada segundo y la acumula en cada Spirit individualmente
+
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+
+local GENERATION_INTERVAL = 1 -- Cada segundo
+
+local function generateEssence()
+	for i = 1, 8 do
+		local base = Workspace:FindFirstChild("base" .. i)
+		if not base then continue end
+
+		local baseFolder = base:FindFirstChild("based") and base.based:FindFirstChild("base")
+		if not baseFolder then continue end
+
+		for s = 1, 10 do
+			local slot = baseFolder:FindFirstChild("slot" .. s)
+			if not slot then continue end
+
+			local spirit = slot:FindFirstChild("Spirit")
+			if not spirit then continue end
+
+			-- Leer la tasa de generación del Spirit
+			local rate = spirit:GetAttribute("EssenceRate") or 0
+			if rate <= 0 then continue end
+
+			-- Acumular Esencia en el propio Spirit
+			local current = spirit:GetAttribute("AccumulatedEssence") or 0
+			spirit:SetAttribute("AccumulatedEssence", current + rate)
+		end
+	end
+end
+
+-- Loop principal cada segundo
+while true do
+	generateEssence()
+	task.wait(GENERATION_INTERVAL)
+end
+
+11./EssenceLeaderStats
+
+--!strict
+-- EssenceLeaderstats
+-- Crea el Leaderstats de Esencia para cada jugador
+
+local Players = game:GetService("Players")
+
+local function setupLeaderstats(player: Player)
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+	leaderstats.Parent = player
+
+	local esencia = Instance.new("IntValue")
+	esencia.Name = "Esencia"
+	esencia.Value = 0
+	esencia.Parent = leaderstats
+end
+
+Players.PlayerAdded:Connect(function(player)
+	setupLeaderstats(player)
+end)
+
+-- Por si algún jugador ya está en el juego
+for _, player in ipairs(Players:GetPlayers()) do
+	if not player:FindFirstChild("leaderstats") then
+		setupLeaderstats(player)
+	end
+end
+
+12./EssencePlatformDisplay
+
+--!strict
+-- Script: EssenceGenerator
+-- Ubicación: ServerScriptService
+
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+
+local ServerScriptService = game:GetService("ServerScriptService")
+local DataManager = require(ServerScriptService:WaitForChild("DataManager"))
+
+local GENERATION_INTERVAL = 1 -- Cada segundo
+local MAX_SLOTS = 10 -- 🆕 Cambiar a 20 cuando expandas tu base
+
+local function getPlayerFromBase(baseNum: number): Player?
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player:GetAttribute("BaseNumber") == baseNum then
+			return player
+		end
+	end
+	return nil
+end
+
+local function generateEssence()
+	for i = 1, 8 do
+		local base = Workspace:FindFirstChild("base" .. i)
+		if not base then continue end
+
+		local baseFolder = base:FindFirstChild("based") and base.based:FindFirstChild("base")
+		if not baseFolder then continue end
+
+		-- Buscar al dueño de la base
+		local owner = getPlayerFromBase(i)
+		local multiplier = 1
+
+		if owner then
+			local data = DataManager.GetData(owner)
+			if data and data.MultiplicadorEsencia then
+				multiplier = data.MultiplicadorEsencia
+			end
+		end
+
+		-- Bucle dinámico usando la variable MAX_SLOTS
+		for s = 1, MAX_SLOTS do
+			local slot = baseFolder:FindFirstChild("slot" .. s)
+			if not slot then continue end
+
+			-- 🆕 Ruta corregida: Busca EssencePlatform1, EssencePlatform2, etc.
+			local essencePlatform = baseFolder:FindFirstChild("EssencePlatform" .. s)
+
+			local spirit = slot:FindFirstChild("Spirit")
+
+			-- Si NO hay spirit en el slot, limpiamos el texto de la plataforma correspondiente
+			if not spirit then 
+				if essencePlatform and essencePlatform:IsA("BasePart") then
+					local billboard = essencePlatform:FindFirstChild("PlatformDisplay") :: BillboardGui
+					local amountLabel = billboard and billboard:FindFirstChild("AmountLabel") :: TextLabel
+					if amountLabel then amountLabel.Text = "Vacío" end
+				end
+				continue 
+			end
+
+			local rate = spirit:GetAttribute("EssenceRate") or 0
+			if rate <= 0 then continue end
+
+			-- Aplicar multiplicador del rebirth
+			local finalRate = rate * multiplier
+			local current = spirit:GetAttribute("AccumulatedEssence") or 0
+			local newAccumulated = current + finalRate
+
+			spirit:SetAttribute("AccumulatedEssence", newAccumulated)
+
+			-- 🆕 ACTUALIZAR EL TEXTO EN LA PLATAFORMA DE ESTE SLOT ESPECÍFICO
+			if essencePlatform and essencePlatform:IsA("BasePart") then
+				local billboard = essencePlatform:FindFirstChild("PlatformDisplay") :: BillboardGui
+
+				if not billboard then
+					billboard = Instance.new("BillboardGui")
+					billboard.Name = "PlatformDisplay"
+					billboard.Size = UDim2.new(0, 150, 0, 40)
+					billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+					billboard.AlwaysOnTop = true
+					billboard.MaxDistance = 45
+
+					local textLabel = Instance.new("TextLabel")
+					textLabel.Name = "AmountLabel"
+					textLabel.Size = UDim2.new(1, 0, 1, 0)
+					textLabel.BackgroundTransparency = 1
+					textLabel.TextColor3 = Color3.fromRGB(85, 255, 127) -- Verde Tycoon
+					textLabel.TextSize = 14
+					textLabel.Font = Enum.Font.GothamBold
+					textLabel.TextStrokeTransparency = 0.3
+					textLabel.Parent = billboard
+
+					billboard.Parent = essencePlatform
+				end
+
+				local amountLabel = billboard:FindFirstChild("AmountLabel") :: TextLabel
+				if amountLabel then
+					amountLabel.Text = string.format("✨ Esencia: %d", newAccumulated)
+				end
+			end
+		end
+	end
+end
+
+-- Loop principal
+while true do
+	generateEssence()
+	task.wait(GENERATION_INTERVAL)
+end
+
+13./FriendTeleportSystem
+
+--!strict
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local FriendAccessSystem = require(ServerScriptService:WaitForChild("FriendAccessSystem"))
+local DataManager = require(ServerScriptService:WaitForChild("DataManager"))
+
+local FRIEND_ENTRY_PAD_NAME = "FriendEntryPad"
+local BASE_EXIT_PAD_NAME = "BaseExitPad"
+
+local requestTeleport = ReplicatedStorage:WaitForChild("RequestTeleportToBase")
+
+-- RemoteEvent para abrir GUI en el cliente
+local openFriendGui = ReplicatedStorage:FindFirstChild("OpenFriendTeleportGui")
+if not openFriendGui then
+	openFriendGui = Instance.new("RemoteEvent")
+	openFriendGui.Name = "OpenFriendTeleportGui"
+	openFriendGui.Parent = ReplicatedStorage
+end
+
+-- ==========================================
+-- FriendEntryPad
+-- ==========================================
+for i = 1, 8 do
+	local base = Workspace:FindFirstChild("base" .. i)
+	if not base then continue end
+
+	local entryPad = base:FindFirstChild(FRIEND_ENTRY_PAD_NAME)
+	if not entryPad then continue end
+
+	local prompt = entryPad:FindFirstChildOfClass("ProximityPrompt")
+	if not prompt then
+		prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Entrar a la base"
+		prompt.ObjectText = "Acceso"
+		prompt.HoldDuration = 0
+		prompt.MaxActivationDistance = 8
+		prompt.Parent = entryPad
+	end
+
+	prompt.Triggered:Connect(function(player)
+		-- El dueño no necesita este sistema
+		if player:GetAttribute("BaseNumber") == i then return end
+
+		-- Abrir GUI via RemoteEvent (fix Bug 2)
+		openFriendGui:FireClient(player, i)
+	end)
+end
+
+-- ==========================================
+-- Validar y ejecutar teletransporte de entrada
+-- ==========================================
+requestTeleport.OnServerEvent:Connect(function(player, baseNumber)
+	local owner = nil
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p:GetAttribute("BaseNumber") == baseNumber then
+			owner = p
+			break
+		end
+	end
+
+	if not owner then return end
+
+	local canEnter = false
+
+	if player == owner then
+		canEnter = true
+	elseif FriendAccessSystem.GetAllowFriends(baseNumber) then
+		if player:IsFriendsWith(owner.UserId) then
+			canEnter = true
+		end
+	end
+
+	if canEnter then
+		local character = player.Character
+		if not character then return end
+
+		local base = Workspace:FindFirstChild("base" .. baseNumber)
+		if not base then return end
+
+		local friendPoint = base:FindFirstChild("FriendTeleportPoint")
+		if friendPoint then
+			character:PivotTo(friendPoint.CFrame + Vector3.new(0, 5, 0))
+		end
+	else
+		warn(player.Name .. " intentó entrar a la base " .. baseNumber .. " sin permiso")
+	end
+end)
+
+-- ==========================================
+-- BaseExitPad (fix Bug 1)
+-- ==========================================
+for i = 1, 8 do
+	local base = Workspace:FindFirstChild("base" .. i)
+	if not base then continue end
+
+	local exitPad = base:FindFirstChild(BASE_EXIT_PAD_NAME)
+	if not exitPad then continue end
+
+	local debounce = {}
+
+	exitPad.Touched:Connect(function(hit)
+		local character = hit.Parent
+		local player = Players:GetPlayerFromCharacter(character)
+		if not player then return end
+
+		-- Debounce para evitar spam de Touched
+		if debounce[player.UserId] then return end
+		debounce[player.UserId] = true
+		task.delay(2, function() debounce[player.UserId] = nil end)
+
+		-- El dueño no puede salir por aquí
+		if player:GetAttribute("BaseNumber") == i then return end
+
+		-- Visitante solo puede salir si AllowFriends está activado
+		if not FriendAccessSystem.GetAllowFriends(i) then return end
+
+		local spawnFolder = Workspace:FindFirstChild("spawns")
+		if not spawnFolder then return end
+
+		local spawn = spawnFolder:FindFirstChild("SpawnLocation" .. i)
+		if spawn then
+			character:PivotTo(spawn.CFrame + Vector3.new(0, 5, 0))
+		end
+	end)
+end
+
+print("✅ [FriendTeleportSystem] Sistema completo iniciado")
+
+14./LaserVisibility
+
+local Workspace = game:GetService("Workspace")
+
+local function updateLasers(baseNumber, visible)
+	local base = Workspace:FindFirstChild("base" .. baseNumber)
+	if not base then return end
+
+	local based = base:FindFirstChild("based")
+	if not based then return end
+
+	local innerBase = based:FindFirstChild("base")
+	if not innerBase then return end
+
+	for i = 1, 4 do
+		local laser = innerBase:FindFirstChild("laser" .. i)
+		if laser then
+			laser.Transparency = visible and 0 or 1
+			laser.CanCollide = false
+		end
+	end
+end
+
+-- Ocultamos todos los láseres al inicio
+for i = 1, 8 do
+	updateLasers(i, false)
+end
+
+-- Función para mostrar láseres de una base
+local function showLasersForPlayer(player)
+	local baseNumber = player:GetAttribute("BaseNumber")
+	if baseNumber then
+		updateLasers(baseNumber, true)
+	end
+end
+
+-- Cuando un jugador entra
+game.Players.PlayerAdded:Connect(function(player)
+
+	-- Mostramos los láseres si ya tiene base asignada
+	task.delay(1, function()
+		showLasersForPlayer(player)
+	end)
+
+	-- Por si se asigna después
+	player:GetAttributeChangedSignal("BaseNumber"):Connect(function()
+		showLasersForPlayer(player)
+	end)
+end)
+
+_G.UpdateBaseLasers = updateLasers
+
+print("✅ Sistema de visibilidad de láseres corregido")
+
+15./OrbSystem
+
+local ServerScriptService = game:GetService("ServerScriptService")
+local Workspace = game:GetService("Workspace")
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local SpiritPositionManager = require(ServerScriptService:WaitForChild("SpiritPositionManager"))
+
+-- =============================================================================
+-- ⚡ ENLACE AL SPEEDMANAGER
+-- =============================================================================
+local ServerScriptService = game:GetService("ServerScriptService")
+local SpeedManager = require(ServerScriptService:WaitForChild("SpeedManager"))
+-- =============================================================================
+
+local carrying = _G.CarryingSpirits or {}
+_G.CarryingSpirits = carrying
+
+local carryConnections = {}
+
+-- ====================== FUNCIONES CENTRALIZADAS ======================
+local function startCarrying(ply, spr)
+	if not ply or not spr then return end
+	carrying[ply] = spr
+	ply:SetAttribute("IsCarryingSpirit", true)
+	spr:SetAttribute("SpiritState", "Holding")
+
+	-- ✨ SOLUCIÓN: Le ponemos "HasSpirit" al Character para que el SpeedManager lo lea
+	if ply.Character then
+		ply.Character:SetAttribute("HasSpirit", true)
+	end
+	SpeedManager.UpdateSpeed(ply)
+end
+
+local function stopCarrying(ply)
+	if not ply then return end
+	local spr = carrying[ply]
+	carrying[ply] = nil
+	ply:SetAttribute("IsCarryingSpirit", false)
+
+	-- ✨ SOLUCIÓN: Limpiamos el "HasSpirit" del Character al soltarlo
+	if ply.Character then
+		ply.Character:SetAttribute("HasSpirit", false)
+	end
+	SpeedManager.UpdateSpeed(ply)
+
+	if carryConnections[ply] then
+		carryConnections[ply]:Disconnect()
+		carryConnections[ply] = nil
+	end
+	if spr and spr.Parent then
+		local state = spr:GetAttribute("SpiritState")
+		if state == "Holding" then
+			spr:SetAttribute("SpiritState", "World")
+			_G.ScheduleSpiritDestroy(spr)
+		end
+	end
+end
+
+-- ====================== FUNCIÓN CENTRALIZADA DE RECOGIDA ======================
+local SpiritUtils = require(ServerScriptService:WaitForChild("SpiritUtils"))
+
+local function setupSpiritPickup(spirit)
+	if not spirit or not spirit.Parent then return end
+	if spirit:GetAttribute("IsBeingCarried") then return end
+	if spirit:FindFirstChildOfClass("ProximityPrompt") then return end
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Recoger Spirit"
+	prompt.ObjectText = "Spirit"
+	prompt.HoldDuration = 0.5
+	prompt.MaxActivationDistance = 10
+	prompt.Parent = spirit
+
+	prompt.Triggered:Connect(function(player)
+		if carrying[player] then return end
+
+		local originSlot = spirit.Parent
+		if originSlot and not string.match(originSlot.Name, "slot") then
+			originSlot = nil
+		end
+
+		spirit:SetAttribute("IsBeingCarried", true)
+
+		-- Limpiar fuerzas y físicas
+		for _, v in spirit:GetChildren() do
+			if v:IsA("BodyVelocity") or v:IsA("VectorForce") or v:IsA("WeldConstraint") then
+				v:Destroy()
+			end
+		end
+
+		SpiritUtils.ClearVelocities(spirit)
+		SpiritUtils.SetAnchored(spirit, true)
+		SpiritUtils.SetCanCollide(spirit, false)
+
+		startCarrying(player, spirit)
+
+		if spirit:GetAttribute("FromSlot") then
+			print("[OrbSystem] Spirit de slot recogido de: " .. (originSlot and originSlot.Name or "Desconocido"))
+
+			local baseNum = player:GetAttribute("BaseNumber")
+			if baseNum and originSlot then
+				local slotNum = tonumber(string.match(originSlot.Name, "%d+"))
+				if slotNum then
+					local DataManager = require(game:GetService("ServerScriptService"):WaitForChild("DataManager"))
+					local spiritName = spirit:GetAttribute("SpiritName") or spirit.Name
+
+					DataManager.SetHeldSpirit(player, spiritName, baseNum, slotNum)
+					DataManager.RemoveSpiritFromSlot(player, baseNum, slotNum)
+					print("[OrbSystem] Spirit en transito guardado en HeldSpirit")
+				end
+			end
+
+			-- Lógica de prompts para colocar/intercambiar (se mantiene igual)
+			local baseNum = player:GetAttribute("BaseNumber")
+			if baseNum then
+				local playerBase = Workspace:FindFirstChild("base" .. baseNum)
+				local baseFolder = playerBase and playerBase:FindFirstChild("based") and playerBase.based:FindFirstChild("base")
+
+				if baseFolder then
+					local activeSlotPrompts = {}
+
+					for s = 1, 10 do
+						local slot = baseFolder:FindFirstChild("slot" .. s)
+						if slot and slot:IsA("BasePart") then
+							local occupantSpirit = slot and SpiritUtils.GetSpiritInSlot(slot) or nil
+
+							local slotPrompt = Instance.new("ProximityPrompt")
+							slotPrompt.Name = "MoveSpiritPrompt"
+							slotPrompt.HoldDuration = 0.5
+							slotPrompt.MaxActivationDistance = 6
+							slotPrompt.Exclusivity = Enum.ProximityPromptExclusivity.OnePerButton
+							slotPrompt.Parent = slot
+
+							if occupantSpirit then
+								slotPrompt.ActionText = "Intercambiar Spirit"
+								slotPrompt.ObjectText = "Slot " .. s .. " (Ocupado)"
+							else
+								slotPrompt.ActionText = "Colocar aquí"
+								slotPrompt.ObjectText = "Slot " .. s
+							end
+
+							table.insert(activeSlotPrompts, slotPrompt)
+
+							slotPrompt.Triggered:Connect(function(p)
+								if p ~= player or carrying[p] ~= spirit then return end
+
+								print("[OrbSystem] Procesando colocación en slot " .. s)
+								spirit:SetAttribute("SpiritState", "Base")
+								stopCarrying(p)
+
+								local targetOccupant = SpiritUtils.GetSpiritInSlot(slot)
+
+								if targetOccupant and targetOccupant ~= spirit then
+									if originSlot then
+										print("[OrbSystem] Intercambiando: Mandando " .. targetOccupant.Name .. " a " .. originSlot.Name)
+
+										local occPrompt = targetOccupant:FindFirstChildOfClass("ProximityPrompt")
+										if occPrompt then occPrompt:Destroy() end
+
+										SpiritPositionManager.PlaceInSlot(targetOccupant, originSlot)
+
+										task.defer(function()
+											setupSpiritPickup(targetOccupant)
+										end)
+									else
+										print("[OrbSystem] No hay slot de origen para intercambiar. Acción cancelada.")
+										startCarrying(p, spirit)
+										return
+									end
+								end
+
+								-- Colocar el Spirit que llevamos
+								spirit.Parent = slot
+								SpiritPositionManager.PlaceInSlot(spirit, slot)
+								spirit:SetAttribute("IsBeingCarried", nil)
+
+								for _, sPrompt in ipairs(activeSlotPrompts) do
+									if sPrompt and sPrompt.Parent then sPrompt:Destroy() end
+								end
+								table.clear(activeSlotPrompts)
+
+								task.wait(0.1)
+								setupSpiritPickup(spirit)
+							end)
+						end
+					end
+				end
+			end
+		end
+
+		if prompt and prompt.Parent then
+			prompt:Destroy()
+		end
+
+		-- Loop para seguir al jugador mientras lo carga
+		local connection
+		connection = RunService.Heartbeat:Connect(function()
+			if carrying[player] ~= spirit then
+				if connection then connection:Disconnect() end
+				return
+			end
+
+			if not spirit or not spirit.Parent or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+				if connection then connection:Disconnect() end
+				return
+			end
+
+			local offset = CFrame.new(0, 0.8, -3.2) * CFrame.Angles(math.rad(-20), 0, 0)
+			SpiritUtils.UpdateCarriedOrientation(spirit, player)
+		end)
+
+		carryConnections[player] = connection
+	end)
+end
+
+_G.SetupOrbPickup = setupSpiritPickup
+
+-- ====================== DETECTAR EN EL WORKSPACE ======================
+Workspace.ChildAdded:Connect(function(child)
+	if child.Name == "Spirit" or child.Name == "Orbe" then
+		task.wait(0.3)
+		setupSpiritPickup(child)
+	end
+end)
+
+for _, child in ipairs(Workspace:GetChildren()) do
+	if child.Name == "Spirit" or child.Name == "Orbe" then
+		setupSpiritPickup(child)
+	end
+end
+
+-- ====================== CONTROL DE RESETS / MUERTE ======================
+Players.PlayerAdded:Connect(function(player)
+	player.CharacterRemoving:Connect(function(char)
+		task.wait()
+		local spirit = carrying[player]
+		if not spirit or not spirit.Parent then return end
+
+		if carryConnections[player] then
+			carryConnections[player]:Disconnect()
+			carryConnections[player] = nil
+		end
+
+		if spirit:GetAttribute("SpiritState") == "Holding" and spirit:GetAttribute("FromSlot") then
+			spirit:Destroy()
+			print("[OrbSystem] Spirit de base destruido por muerte del jugador")
+			stopCarrying(player)
+			return
+		end
+
+		spirit.Anchored = false
+		spirit.CanCollide = true
+
+		local dropPos = char and char:FindFirstChild("HumanoidRootPart") 
+			and char.HumanoidRootPart.Position + Vector3.new(0, 6, 0) 
+			or Vector3.new(0, 60, 0)
+		spirit.Position = dropPos
+		spirit.Velocity = Vector3.new(0, -18, 0)
+		spirit:SetAttribute("IsBeingCarried", nil)
+		spirit:SetAttribute("SpiritState", "World")
+
+		setupSpiritPickup(spirit)
+		_G.ScheduleSpiritDestroy(spirit)
+		stopCarrying(player)
+	end)
+end)
+
+print("✅ [OrbSystem] Alineado perfectamente con las variables del SpeedManager.")
+
+16./RebirthManager
+
+--!strict
+-- ModuleScript: RebirthManager
+-- Ubicación: ServerScriptService
+
+local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local DataManager = require(ServerScriptService:WaitForChild("DataManager"))
+
+local RebirthConfig = {
+	CostFormula = function(currentRebirth: number): number
+		return math.floor(10000 * (currentRebirth + 1) * 1.2)
+	end,
+
+	MultiplierFormula = function(currentRebirth: number): number
+		return currentRebirth + 1
+	end,
+
+	SlotsFormula = function(currentRebirth: number): number
+		return currentRebirth + 1
+	end,
+
+	CritBonusPerRebirth = 1
+}
+
+local RebirthEvents = Instance.new("RemoteEvent")
+RebirthEvents.Name = "RebirthEvents"
+RebirthEvents.Parent = ReplicatedStorage
+
+local RebirthManager = {}
+
+-- Debounce simple
+local lastRebirth = {}
+
+function RebirthManager.CanRebirth(player: Player): (boolean, string)
+	if not player or not player:IsA("Player") then
+		return false, "Jugador inválido"
+	end
+
+	local data = DataManager.GetData(player)
+	if not data then
+		return false, "Datos no cargados"
+	end
+
+	if data.HeldSpirit or player:GetAttribute("IsCarryingSpirit") then
+		return false, "No puedes renacer mientras llevas un Spirit"
+	end
+
+	local costo = RebirthConfig.CostFormula(data.Rebirths)
+	if data.Esencia < costo then
+		return false, string.format("Necesitas %d de esencia", costo)
+	end
+
+	return true, "Listo para renacer"
+end
+
+function RebirthManager.DoRebirth(player: Player): boolean
+	-- Debounce
+	if lastRebirth[player] and os.clock() - lastRebirth[player] < 2 then
+		return false
+	end
+	lastRebirth[player] = os.clock()
+
+	local puede, motivo = RebirthManager.CanRebirth(player)
+	if not puede then
+		RebirthEvents:FireClient(player, "Fallido", motivo)
+		return false
+	end
+
+	local data = DataManager.GetData(player)
+	local rebirthsAnteriores = data.Rebirths
+
+	-- 🧹 Limpiar Spirits de la base (mejorar esto después)
+	local baseNum = player:GetAttribute("BaseNumber")
+	if baseNum then
+		local baseObj = Workspace:FindFirstChild("base" .. baseNum)
+		if baseObj and baseObj:FindFirstChild("based") and baseObj.based:FindFirstChild("base") then
+			local baseFolder = baseObj.based.base
+			for _, obj in ipairs(baseFolder:GetChildren()) do
+				if obj:IsA("BasePart") and obj.Name:match("^slot%d+$") then
+					local spirit = obj:FindFirstChild("Spirit") or obj:FindFirstChild("Orbe")
+					if spirit then spirit:Destroy() end
+				end
+			end
+		end
+	end
+
+	-- 📉 Reset + aplicar beneficios permanentes
+	DataManager.UpdateData(player, function(d)
+		d.Esencia = 0
+		d.HeldSpirit = nil
+		d.Spirits = {}
+
+		d.Turret.Stats = {
+			Damage = 10, ProjectileSpeed = 450, ProjectileSize = 4,
+			FireRate = 0.15, Range = 200, CritChance = 0, MultiShot = 1,
+		}
+		d.Turret.Levels = {
+			Damage = 0, ProjectileSpeed = 0, ProjectileSize = 0,
+			FireRate = 0, Range = 0, CritChance = 0, MultiShot = 0,
+		}
+
+		d.Rebirths = rebirthsAnteriores + 1
+		d.MultiplicadorEsencia = RebirthConfig.MultiplierFormula(d.Rebirths)
+		d.EspaciosMaxBase = RebirthConfig.SlotsFormula(d.Rebirths)
+		d.BonoCriticoPorcentual = d.Rebirths * RebirthConfig.CritBonusPerRebirth
+
+		return d
+	end)
+
+	-- 🔄 Obtener datos actualizados
+	data = DataManager.GetData(player)
+	DataManager.SaveData(player)
+
+	RebirthEvents:FireClient(player, "Exitoso", {
+		Rebirths = data.Rebirths,
+		Multiplicador = data.MultiplicadorEsencia,
+		Espacios = data.EspaciosMaxBase,
+		CriticoExtra = data.BonoCriticoPorcentual
+	})
+
+	print(string.format("[RebirthManager] ✅ %s → Rebirth %d", player.Name, data.Rebirths))
+	return true
+end
+
+function RebirthManager.GetInfo(player: Player): {}?
+	local data = DataManager.GetData(player)
+	if not data then return nil end
+
+	return {
+		Actual = data.Rebirths,
+		CostoSiguiente = RebirthConfig.CostFormula(data.Rebirths),
+		Multiplicador = data.MultiplicadorEsencia,
+		EspaciosMax = data.EspaciosMaxBase,
+		BonoCritico = data.BonoCriticoPorcentual
+	}
+end
+
+-- Conexiones
+RebirthEvents.OnServerEvent:Connect(function(player: Player, accion: string)
+	if accion == "HacerRebirth" then
+		RebirthManager.DoRebirth(player)
+	elseif accion == "PedirInfo" then
+		local info = RebirthManager.GetInfo(player)
+		if info then
+			RebirthEvents:FireClient(player, "InfoActual", info)
+		end
+	end
+end)
+
+-- Corrección al entrar
+Players.PlayerAdded:Connect(function(player: Player)
+	task.spawn(function()
+		repeat task.wait(0.1) until DataManager.GetData(player) or not player:IsDescendantOf(Players)
+		local data = DataManager.GetData(player)
+		if not data then return end
+
+		DataManager.UpdateData(player, function(d)
+			d.MultiplicadorEsencia = RebirthConfig.MultiplierFormula(d.Rebirths)
+			d.EspaciosMaxBase = RebirthConfig.SlotsFormula(d.Rebirths)
+			d.BonoCriticoPorcentual = d.Rebirths * RebirthConfig.CritBonusPerRebirth
+			return d
+		end)
+	end)
+end)
+
+return RebirthManager
+
+17./ShopPurchaseHandler
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local ShopEvents = ReplicatedStorage:WaitForChild("ShopEvents")
+local BuyItem = ShopEvents:WaitForChild("BuyItem")
+
+local ToolsFolder = ReplicatedStorage:WaitForChild("Tools")
+
+BuyItem.OnServerEvent:Connect(function(player, toolName)
+	local toolTemplate = ToolsFolder:FindFirstChild(toolName)
+
+	if not toolTemplate then
+		warn("[Shop] No se encontró la herramienta: " .. tostring(toolName))
+		return
+	end
+
+	-- Clonar la herramienta y dársela al jugador
+	local newTool = toolTemplate:Clone()
+	newTool.Parent = player.Backpack
+
+	print(player.Name .. " compró: " .. toolName)
+end)
+
+18./ShoptZoneHandler
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ShopEvents = ReplicatedStorage:WaitForChild("ShopEvents")
+local OpenShop = ShopEvents:WaitForChild("OpenShop")
+local CloseShop = ShopEvents:WaitForChild("CloseShop")
+
+-- Detecta todas las ShopZone que existan (incluyendo las que están dentro de las bases)
+local function setupShopZone(zone)
+	if not zone:IsA("BasePart") then return end
+
+	zone.Touched:Connect(function(hit)
+		local character = hit.Parent
+		local player = Players:GetPlayerFromCharacter(character)
+		if player then
+			OpenShop:FireClient(player)
+		end
+	end)
+
+	zone.TouchEnded:Connect(function(hit)
+		local character = hit.Parent
+		local player = Players:GetPlayerFromCharacter(character)
+		if player then
+			CloseShop:FireClient(player)
+		end
+	end)
+end
+
+-- Busca las zonas existentes
+for _, obj in ipairs(workspace:GetDescendants()) do
+	if obj.Name == "ShopZone" then
+		setupShopZone(obj)
+	end
+end
+
+-- Por si agregas más ShopZone después
+workspace.DescendantAdded:Connect(function(obj)
+	if obj.Name == "ShopZone" then
+		setupShopZone(obj)
+	end
+end)
+
+print("✅ [ShopZoneHandler] Sistema de zonas de tienda activado")
+
+19./SpeedInitializer
+
+-- Script: SpeedInitializer
+-- Ubicación: ServerScriptService
+-- Objetivo: Garantizar que todos los jugadores nazcan con la velocidad del SpeedManager
+
+local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
+local SpeedManager = require(ServerScriptService:WaitForChild("SpeedManager"))
+
+local function onCharacterAdded(character, player)
+	-- 1. Esperamos a que el Humanoid exista y esté listo
+	local humanoid = character:WaitForChild("Humanoid")
+
+	-- 2. Usamos task.defer para dejar que Roblox aplique su velocidad de 16 por defecto...
+	-- y una fracción de milisegundo después, el SpeedManager toma el control total.
+	task.defer(function()
+		if player and character:IsDescendantOf(workspace) then
+			SpeedManager.UpdateSpeed(player)
+			print("⚡ [SpeedManager] Velocidad inicial aplicada con éxito a: " .. player.Name)
+		end
+	end)
+end
+
+local function onPlayerAdded(player)
+	player.CharacterAdded:Connect(function(character)
+		onCharacterAdded(character, player)
+	end)
+
+	-- Por si el jugador cargó el personaje antes de que este script se ejecutara
+	if player.Character then
+		onCharacterAdded(player.Character, player)
+	end
+end
+
+-- Escuchar a los nuevos jugadores
+Players.PlayerAdded:Connect(onPlayerAdded)
+
+-- Manejar a los jugadores que ya están en el servidor (por si las dudas en modo Play)
+for _, player in pairs(Players:GetPlayers()) do
+	onPlayerAdded(player)
+end
+
+20./SpiritDepositSystem
+
+--!strict
+-- Script: SpiritDepositSystem
+-- Ubicación: ServerScriptService
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ServerScriptService = game:GetService("ServerScriptService")
+local SpiritUtils = require(ServerScriptService:WaitForChild("SpiritUtils"))
+local DataManager = require(ServerScriptService:WaitForChild("DataManager"))
+local SpiritPositionManager = require(ServerScriptService:WaitForChild("SpiritPositionManager"))
+
+-- 🆕 ENLACE AL SPEEDMANAGER PARA QUITAR LA LENTITUD AL DEPOSITAR
+local SpeedManager = require(ServerScriptService:WaitForChild("SpeedManager"))
+
+local carrying = _G.CarryingSpirits or {}
+_G.CarryingSpirits = carrying
+
+for i = 1, 8 do
+	local base = Workspace:FindFirstChild("base" .. i)
+	if base then
+		local depositZone = base:FindFirstChild("SpiritDepositZone")
+
+		if depositZone and depositZone:IsA("BasePart") then
+			depositZone.Touched:Connect(function(hit)
+				local character = hit.Parent
+				local player = Players:GetPlayerFromCharacter(character)
+				if not player then return end
+
+				if player:GetAttribute("BaseNumber") ~= i then return end
+
+				local spirit = carrying[player]
+				if not spirit or not spirit.Parent then return end
+
+				if spirit:GetAttribute("FromSlot") then return end
+
+				-- Buscar slot vacío
+				local slotFound = nil
+				local slotNumber = nil
+				for s = 1, 10 do
+					local slot = base:FindFirstChild("based")
+						and base.based:FindFirstChild("base")
+						and base.based.base:FindFirstChild("slot" .. s)
+
+					if slot and slot:IsA("BasePart") and not SpiritUtils.GetSpiritInSlot(slot) then
+						slotFound = slot
+						slotNumber = s
+						break
+					end
+				end
+
+				if not slotFound then
+					print("[SpiritDeposit] No hay slots disponibles en base " .. i)
+					return
+				end
+
+				-- Depositar
+				print("[SpiritDeposit] " .. player.Name .. " depositó un Spirit en " .. slotFound.Name)
+
+				spirit.Name = "Spirit"
+
+				-- ✨ CORRECCIÓN 1: Usar 'slotFound' en lugar de 'slot' para que Blender sepa dónde acomodarlo
+				SpiritPositionManager.PlaceInSlot(spirit, slotFound)
+
+				-- Mantenemos las utilidades por si ejecutan configuraciones extra en el modelo
+				SpiritUtils.SetAnchored(spirit, true)
+				SpiritUtils.SetCanCollide(spirit, false)
+
+				spirit:SetAttribute("IsBeingCarried", nil)
+				spirit:SetAttribute("FromSlot", true)
+				spirit:SetAttribute("SpiritState", "Base")
+				carrying[player] = nil
+				player:SetAttribute("IsCarryingSpirit", false)
+
+				-- ✨ CORRECCIÓN 2: Limpiar estado de velocidad para que el jugador vuelva a correr a 22
+				if character then
+					character:SetAttribute("HasSpirit", false)
+				end
+				SpeedManager.UpdateSpeed(player)
+
+				-- GUARDAR en DataManager
+				local spiritName = spirit:GetAttribute("SpiritName") or spirit.Name
+				local accumulated = spirit:GetAttribute("AccumulatedEssence") or 0
+				DataManager.SaveSpiritToSlot(player, i, slotNumber, spiritName, accumulated)
+				print("[SpiritDeposit] Spirit guardado en DataManager: base" .. i .. " slot" .. slotNumber)
+				DataManager.ClearHeldSpirit(player)
+				print("[SpiritDeposit] HeldSpirit limpiado")
+
+				local setupModule = _G.SetupOrbPickup
+				if setupModule then
+					setupModule(spirit)
+				end
+			end)
+		end
+	end
+end
+
+print("✅ [SpiritDepositSystem] Sincronizado con SpiritPositionManager y SpeedManager.")		
+
+21./SpiritLoader
+
+--!strict
+-- Script: SpiritLoader
+-- Ubicación: ServerScriptService
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local DataManager = require(ServerScriptService:WaitForChild("DataManager"))
+local SpiritPositionManager = require(ServerScriptService:WaitForChild("SpiritPositionManager"))
+local SpiritUtils = require(ServerScriptService:WaitForChild("SpiritUtils"))
+local SpiritTemplate = ReplicatedStorage:WaitForChild("SpiritTemplate")
+
+local SpiritDatabase = {
+	{Name = "Espiritu de Tierra",          Rarity = "Comun",      EssenceRate = 1,       SpiriumValue = 5},
+	{Name = "Espiritu de Brisa",           Rarity = "Comun",      EssenceRate = 2,       SpiriumValue = 8},
+	{Name = "Espiritu de Gota",            Rarity = "Comun",      EssenceRate = 3,       SpiriumValue = 10},
+	{Name = "Espiritu de Musgo",           Rarity = "Comun",      EssenceRate = 4,       SpiriumValue = 12},
+	{Name = "Espiritu de Chispa",          Rarity = "Comun",      EssenceRate = 5,       SpiriumValue = 15},
+	{Name = "Espiritu de Arena",           Rarity = "Poco Comun", EssenceRate = 8,       SpiriumValue = 30},
+	{Name = "Espiritu de Hielo",           Rarity = "Poco Comun", EssenceRate = 11,      SpiriumValue = 45},
+	{Name = "Espiritu de Fuego",           Rarity = "Poco Comun", EssenceRate = 14,      SpiriumValue = 60},
+	{Name = "Espiritu de Cristal",         Rarity = "Poco Comun", EssenceRate = 17,      SpiriumValue = 75},
+	{Name = "Espiritu de Trueno",          Rarity = "Poco Comun", EssenceRate = 20,      SpiriumValue = 90},
+	{Name = "Espiritu del Bosque",         Rarity = "Raro",       EssenceRate = 30,      SpiriumValue = 150},
+	{Name = "Espiritu Marino",             Rarity = "Raro",       EssenceRate = 38,      SpiriumValue = 180},
+	{Name = "Espiritu de Luna",            Rarity = "Raro",       EssenceRate = 47,      SpiriumValue = 220},
+	{Name = "Espiritu de Sombra",          Rarity = "Raro",       EssenceRate = 56,      SpiriumValue = 260},
+	{Name = "Espiritu del Viento Supremo", Rarity = "Raro",       EssenceRate = 65,      SpiriumValue = 300},
+	{Name = "Espiritu Fantasma",           Rarity = "Epico",      EssenceRate = 90,      SpiriumValue = 450},
+	{Name = "Espiritu Arcano",             Rarity = "Epico",      EssenceRate = 110,     SpiriumValue = 550},
+	{Name = "Espiritu de Magma",           Rarity = "Epico",      EssenceRate = 135,     SpiriumValue = 680},
+	{Name = "Espiritu de Tormenta",        Rarity = "Epico",      EssenceRate = 160,     SpiriumValue = 800},
+	{Name = "Espiritu del Vacio",          Rarity = "Epico",      EssenceRate = 180,     SpiriumValue = 900},
+	{Name = "Espiritu de la Vida",         Rarity = "Legendario", EssenceRate = 250,     SpiriumValue = 1200},
+	{Name = "Espiritu de la Estrella",     Rarity = "Legendario", EssenceRate = 320,     SpiriumValue = 1500},
+	{Name = "Espiritu del Sol",            Rarity = "Legendario", EssenceRate = 400,     SpiriumValue = 1800},
+	{Name = "Espiritu del Tiempo",         Rarity = "Legendario", EssenceRate = 470,     SpiriumValue = 2100},
+	{Name = "Espiritu del Dragon",         Rarity = "Legendario", EssenceRate = 550,     SpiriumValue = 2500},
+	{Name = "Espiritu del Caos",           Rarity = "Mitico",     EssenceRate = 800,     SpiriumValue = 3500},
+	{Name = "Espiritu del Juicio",         Rarity = "Mitico",     EssenceRate = 1000,    SpiriumValue = 4200},
+	{Name = "Espiritu de la Muerte",       Rarity = "Mitico",     EssenceRate = 1300,    SpiriumValue = 5000},
+	{Name = "Espiritu de la Dimension",    Rarity = "Mitico",     EssenceRate = 1650,    SpiriumValue = 5800},
+	{Name = "Espiritu del Infinito",       Rarity = "Mitico",     EssenceRate = 2000,    SpiriumValue = 6500},
+	{Name = "Espiritu Demonio",            Rarity = "Demon",      EssenceRate = 3000,    SpiriumValue = 8000},
+	{Name = "Espiritu de la Perdicion",    Rarity = "Demon",      EssenceRate = 4000,    SpiriumValue = 9500},
+	{Name = "Espiritu de la Pesadilla",    Rarity = "Demon",      EssenceRate = 5200,    SpiriumValue = 11000},
+	{Name = "Espiritu Infernal",           Rarity = "Demon",      EssenceRate = 6500,    SpiriumValue = 12500},
+	{Name = "Espiritu del Abismo",         Rarity = "Demon",      EssenceRate = 8000,    SpiriumValue = 14000},
+	{Name = "Espiritu Angel",              Rarity = "Divino",     EssenceRate = 15000,   SpiriumValue = 20000},
+	{Name = "Espiritu Celestial",          Rarity = "Divino",     EssenceRate = 25000,   SpiriumValue = 28000},
+	{Name = "Espiritu del Destino",        Rarity = "Divino",     EssenceRate = 40000,   SpiriumValue = 35000},
+	{Name = "Espiritu de la Creacion",     Rarity = "Divino",     EssenceRate = 65000,   SpiriumValue = 42000},
+	{Name = "Espiritu del Universo",       Rarity = "Divino",     EssenceRate = 100000,  SpiriumValue = 50000},
+	{Name = "Espiritu Santo",              Rarity = "Especial",   EssenceRate = 2000000, SpiriumValue = 100000},
+}
+
+local function findSpiritData(spiritName)
+	for _, s in ipairs(SpiritDatabase) do
+		if s.Name == spiritName then return s end
+	end
+	return nil
+end
+
+local RarityColors = {
+	["Comun"]      = Color3.fromRGB(200, 200, 200),
+	["Poco Comun"] = Color3.fromRGB(80, 200, 80),
+	["Raro"]       = Color3.fromRGB(80, 140, 255),
+	["Epico"]      = Color3.fromRGB(180, 80, 255),
+	["Legendario"] = Color3.fromRGB(255, 200, 50),
+	["Mitico"]     = Color3.fromRGB(255, 80, 80),
+	["Demon"]      = Color3.fromRGB(200, 50, 50),
+	["Divino"]     = Color3.fromRGB(255, 220, 100),
+	["Especial"]   = Color3.fromRGB(255, 255, 255),
+}
+
+local function createBillboard(part, spiritData)
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "SpiritInfo"
+	billboard.Size = UDim2.new(0, 220, 0, 75)
+	billboard.StudsOffset = Vector3.new(0, 3.8, 0)
+	billboard.AlwaysOnTop = true
+	billboard.MaxDistance = 80
+	billboard.ClipsDescendants = false
+	billboard.Parent = part
+
+	-- Esto es lo que fija el tamaño sin importar la distancia
+	local sizeConstraint = Instance.new("UIScale")
+	sizeConstraint.Scale = 1
+	sizeConstraint.Parent = billboard
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.new(1, 0, 0, 32)
+	nameLabel.Position = UDim2.new(0, 0, 0, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = spiritData.Name
+	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.TextScaled = false
+	nameLabel.TextSize = 14
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextStrokeTransparency = 0.4
+	nameLabel.Parent = billboard
+
+	local rarityLabel = Instance.new("TextLabel")
+	rarityLabel.Size = UDim2.new(1, 0, 0, 18)
+	rarityLabel.Position = UDim2.new(0, 0, 0, 30)
+	rarityLabel.BackgroundTransparency = 1
+	rarityLabel.Text = spiritData.Rarity == "Especial" and "???" or spiritData.Rarity
+	rarityLabel.TextColor3 = RarityColors[spiritData.Rarity] or Color3.fromRGB(255, 255, 255)
+	rarityLabel.TextScaled = false
+	rarityLabel.TextSize = 11
+	rarityLabel.Font = Enum.Font.Gotham
+	rarityLabel.TextStrokeTransparency = 0.5
+	rarityLabel.Parent = billboard
+
+	local genLabel = Instance.new("TextLabel")
+	genLabel.Size = UDim2.new(1, 0, 0, 16)
+	genLabel.Position = UDim2.new(0, 0, 0, 48)
+	genLabel.BackgroundTransparency = 1
+	genLabel.Text = "+" .. spiritData.EssenceRate .. " Es/s"
+	genLabel.TextColor3 = Color3.fromRGB(170, 255, 170)
+	genLabel.TextScaled = false
+	genLabel.TextSize = 10
+	genLabel.Font = Enum.Font.Gotham
+	genLabel.TextStrokeTransparency = 0.5
+	genLabel.Parent = billboard
+end
+
+local function loadSpiritsForPlayer(player)
+	local baseNumber = player:GetAttribute("BaseNumber")
+	if not baseNumber then return end
+
+	-- Verificar HeldSpirit
+	local heldSpirit = DataManager.GetHeldSpirit(player)
+	if heldSpirit then
+		local prevBase = tonumber(heldSpirit.PreviousBase)
+		local prevSlot = tonumber(heldSpirit.PreviousSlot)
+
+		if prevBase and prevSlot and prevBase == baseNumber then
+			local base = Workspace:FindFirstChild("base" .. prevBase)
+			local baseFolder = base and base:FindFirstChild("based") and base.based:FindFirstChild("base")
+			local slot = baseFolder and baseFolder:FindFirstChild("slot" .. prevSlot)
+
+			if slot and not SpiritUtils.GetSpiritInSlot(slot) then
+				DataManager.SaveSpiritToSlot(player, prevBase, prevSlot, heldSpirit.SpiritName, 0)
+				print("[SpiritLoader] Spirit restaurado a slot" .. prevSlot)
+			else
+				if baseFolder then
+					for s = 1, 10 do
+						local freeSlot = baseFolder:FindFirstChild("slot" .. s)
+						if freeSlot and not SpiritUtils.GetSpiritInSlot(freeSlot) then
+							DataManager.SaveSpiritToSlot(player, prevBase, s, heldSpirit.SpiritName, 0)
+							print("[SpiritLoader] Spirit restaurado a slot libre " .. s)
+							break
+						end
+					end
+				end
+			end
+			DataManager.ClearHeldSpirit(player)
+		end
+	end
+
+	-- Carga normal de Spirits
+	local baseSpirits = DataManager.GetBaseSpirits(player, baseNumber)
+	if not baseSpirits then return end
+
+	local base = Workspace:FindFirstChild("base" .. baseNumber)
+	if not base then return end
+
+	local baseFolder = base:FindFirstChild("based")
+		and base.based:FindFirstChild("base")
+	if not baseFolder then return end
+
+	for slotKey, spiritSaveData in pairs(baseSpirits) do
+		local slotNumber = tonumber(slotKey)
+		if not slotNumber then continue end
+
+		local slot = baseFolder:FindFirstChild("slot" .. slotNumber)
+		if not slot then continue end
+
+		if SpiritUtils.GetSpiritInSlot(slot) then continue end
+
+		local spiritData = findSpiritData(spiritSaveData.SpiritName)
+		if not spiritData then
+			warn("[SpiritLoader] Spirit no encontrado en DB: " .. tostring(spiritSaveData.SpiritName))
+			continue
+		end
+
+		local rarityFolder = SpiritTemplate:FindFirstChild(spiritData.Rarity)
+		local model = rarityFolder and rarityFolder:FindFirstChild(spiritData.Name)
+
+		local spirit
+		if model then
+			spirit = model:Clone()
+		else
+			spirit = Instance.new("Part")
+			spirit.Shape = Enum.PartType.Ball
+			spirit.Size = Vector3.new(3, 3, 3)
+			spirit.Material = Enum.Material.Neon
+			warn("[SpiritLoader] Modelo no encontrado, usando fallback: " .. spiritData.Name)
+		end
+
+		-- ... (tu código anterior)
+
+		-- ✅ VERSIÓN CORREGIDA
+		SpiritUtils.SetupSpirit(spirit)
+		SpiritPositionManager.PlaceInSlot(spirit, slot)
+		
+	    spirit.Name = "Spirit"
+		spirit:SetAttribute("Rarity", spiritData.Rarity)
+		spirit:SetAttribute("EssenceRate", spiritData.EssenceRate)
+		spirit:SetAttribute("SpiriumValue", spiritData.SpiriumValue)
+		spirit:SetAttribute("SpiritName", spiritData.Name)
+		spirit:SetAttribute("FromSlot", true)
+		spirit:SetAttribute("SpiritState", "Base")
+		spirit:SetAttribute("AccumulatedEssence", spiritSaveData.AccumulatedEssence or 0)
+
+		local br = Instance.new("ObjectValue")
+		br.Name = "Breaker"
+		br.Value = player
+		br.Parent = spirit
+
+		createBillboard(spirit, spiritData)
+
+		local setupModule = _G.SetupOrbPickup
+		if setupModule then
+			setupModule(spirit)
+		end
+
+		print("[SpiritLoader] Spirit cargado: " .. spiritData.Name .. " en slot" .. slotNumber)
+	end
+end
+
+Players.PlayerAdded:Connect(function(player)
+	local tries = 0
+	repeat
+		task.wait(0.5)
+		tries += 1
+	until player:GetAttribute("BaseNumber") ~= nil or tries >= 20
+
+	task.wait(1)
+	loadSpiritsForPlayer(player)
+end)
+
+print("✅ [SpiritLoader] Sistema de carga de Spirits iniciado.")
+
+22./TurretMobileController
+
+-- Script en ServerScriptService
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local ShootEvent = ReplicatedStorage:WaitForChild("TurretShootEvent")
+
+local shootingPlayers = {} -- Tabla para rastrear quién dispara
+
+ShootEvent.OnServerEvent:Connect(function(player, isShooting)
+	local character = player.Character
+	if not character then return end
+
+	local humanoid = character:FindFirstChild("Humanoid")
+	if humanoid and humanoid.Sit then
+		-- Aquí tu lógica de validación (¿es dueño de la torreta?)
+		-- Si es válido, actualizamos el estado
+		shootingPlayers[player.UserId] = isShooting
+	else
+		shootingPlayers[player.UserId] = false -- Anti-abuso: si no está sentado, no dispara
+	end
+end)
+
+-- Bucle de disparo centralizado (Respetando FireRate)
+task.spawn(function()
+	while true do
+		task.wait(0.1) -- Frecuencia de chequeo
+		for userId, isShooting in pairs(shootingPlayers) do
+			if isShooting then
+				-- OBTENER EL PLAYER DESDE EL USERID
+				local player = game.Players:GetPlayerByUserId(userId)
+				if player and player.Character then
+					-- LLAMAR A TU FUNCIÓN DE DISPARO EXISTENTE AQUÍ
+					-- Ej: TurretSystem.Fire(player)
+				end
+			end
+		end
+	end
+end)
+
+23./TurretShooting
+
+-- Script: TurretShooting
+-- Ubicación: ServerScriptService
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Debris = game:GetService("Debris")
+local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local TurretStats = require(ServerScriptService:WaitForChild("TurretStats"))
+local ShootEvent = ReplicatedStorage:WaitForChild("ShootTurret")
+
+local lastShotTime = {} -- Renombrado para mayor claridad
+
+Players.PlayerAdded:Connect(function(player)
+	TurretStats.Init(player)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	TurretStats.Remove(player)
+	lastShotTime[player.UserId] = nil -- Limpieza al salir
+end)
+
+ShootEvent.OnServerEvent:Connect(function(playerWhoShot, firePosition, fireDirection)
+
+	local now = tick()
+	local fireRate = TurretStats.Get(playerWhoShot, "FireRate")
+	if lastShotTime[playerWhoShot.UserId] and (now - lastShotTime[playerWhoShot.UserId]) < fireRate then
+		return
+	end
+	lastShotTime[playerWhoShot.UserId] = now
+
+	local damage = TurretStats.Get(playerWhoShot, "Damage")
+	local speed = TurretStats.Get(playerWhoShot, "ProjectileSpeed")
+	local size = TurretStats.Get(playerWhoShot, "ProjectileSize")
+	local range = TurretStats.Get(playerWhoShot, "Range")
+
+	local ball = Instance.new("Part")
+	ball.Shape = Enum.PartType.Ball
+	ball.Color = Color3.fromRGB(255, 40, 40)
+	ball.Material = Enum.Material.Neon
+	ball.Size = Vector3.new(size, size, size)
+	ball.Position = firePosition + fireDirection * 7
+	ball.Velocity = fireDirection * speed
+	ball.CanCollide = false
+	ball.Parent = workspace
+
+	local lifetime = range / speed
+	Debris:AddItem(ball, lifetime)
+
+	ball.Touched:Connect(function(hit)
+		if not hit or not hit.Parent then return end
+		if hit.Parent:FindFirstChild("Humanoid") then return end
+
+		local current = hit
+		local boxWithHealth = nil
+
+		while current do
+			if current:FindFirstChild("Health") then
+				boxWithHealth = current
+				break
+			end
+			current = current.Parent
+		end
+
+		if boxWithHealth and boxWithHealth.Anchored == false then
+			_G.DamageBox(boxWithHealth, damage, playerWhoShot)
+			ball:Destroy()
+			return
+		end
+
+		ball:Destroy()
+	end)
+end)
+
+24./TurretUpdateHandler
+
+-- Script: TurretUpgradeHandler
+-- Ubicación: ServerScriptService
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local TurretStats = require(ServerScriptService:WaitForChild("TurretStats"))
+
+-- Crear RemoteEvents
+local UpgradeEvents = Instance.new("Folder")
+UpgradeEvents.Name = "UpgradeEvents"
+UpgradeEvents.Parent = ReplicatedStorage
+
+local RequestUpgrade = Instance.new("RemoteEvent")
+RequestUpgrade.Name = "RequestUpgrade"
+RequestUpgrade.Parent = UpgradeEvents
+
+local UpdateUpgradeUI = Instance.new("RemoteEvent")
+UpdateUpgradeUI.Name = "UpdateUpgradeUI"
+UpdateUpgradeUI.Parent = UpgradeEvents
+
+-- Nombres legibles para la UI
+local STAT_NAMES = {
+	Damage = "Daño",
+	ProjectileSpeed = "Velocidad de Proyectil",
+	ProjectileSize = "Tamaño de Proyectil",
+	FireRate = "Cadencia",
+	Range = "Alcance",
+	CritChance = "Probabilidad Crítica",
+	MultiShot = "Multidisparo",
+}
+
+local STAT_ORDER = {"Damage", "FireRate", "Range", "ProjectileSize", "ProjectileSpeed", "CritChance", "MultiShot"}
+
+-- Función para enviar estado actual de upgrades al cliente
+local function sendUpgradeData(player)
+	local upgradeData = {}
+	for _, statName in ipairs(STAT_ORDER) do
+		local level = TurretStats.GetLevel(player, statName)
+		local cost = TurretStats.GetUpgradeCost(player, statName)
+		table.insert(upgradeData, {
+			StatName = statName,
+			DisplayName = STAT_NAMES[statName],
+			Level = level,
+			Cost = cost,
+		})
+	end
+	UpdateUpgradeUI:FireClient(player, upgradeData)
+end
+
+-- Manejar solicitud de mejora
+RequestUpgrade.OnServerEvent:Connect(function(player, statName)
+
+	-- Verificar que el stat existe
+	if not STAT_NAMES[statName] then return end
+
+	-- Verificar que el jugador es dueño de la base
+	local baseNumber = player:GetAttribute("BaseNumber")
+	if not baseNumber then return end
+
+	-- Verificar costo
+	local cost = TurretStats.GetUpgradeCost(player, statName)
+	if not cost then return end -- ya está al máximo
+
+	local esencia = player.leaderstats:FindFirstChild("Esencia")
+	if not esencia or esencia.Value < cost then return end
+
+	-- Aplicar mejora
+	local success = TurretStats.Upgrade(player, statName)
+	if not success then return end
+
+	-- Cobrar Esencia
+	esencia.Value = esencia.Value - cost
+
+	-- Actualizar UI del jugador
+	sendUpgradeData(player)
+end)
+
+-- Cuando el jugador entra, mandar datos iniciales
+Players.PlayerAdded:Connect(function(player)
+	player.CharacterAdded:Connect(function()
+		task.wait(1)
+		sendUpgradeData(player)
+	end)
+end)
+
+25./DataManager
+
+--!strict
+-- ModuleScript: DataManager
+-- Ubicación: ServerScriptService
+
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+
+local GAME_DATA_STORE_NAME = "PlayerData_v1"
+local PlayerDataStore = DataStoreService:GetDataStore(GAME_DATA_STORE_NAME)
+
+local DataManager = {}
+local sessionData = {}
+local AUTOSAVE_INTERVAL = 300 -- 5 minutos
+
+-- Datos por defecto (estructura base del jugador)
+-- Busca esta sección y agrega lo nuevo
+local DEFAULT_DATA = {
+	Version = 1,
+	Esencia = 0,
+	AutoBuyTools = false,
+	LastLogin = 0,
+	HeldSpirit = nil,
+
+	-- 🆕 CAMPOS PARA REBIRTHS
+	Rebirths = 0,                  -- Cantidad total de renacimientos
+	MultiplicadorEsencia = 1,      -- ×1, ×2, ×3... según lo pediste
+	EspaciosMaxBase = 1,           -- Espacios disponibles en la base
+	BonoCriticoPorcentual = 0,     -- % extra de probabilidad de crítico
+
+	Turret = {
+		Stats = {
+			Damage = 10,
+			ProjectileSpeed = 450,
+			ProjectileSize = 4,
+			FireRate = 0.15,
+			Range = 200,
+			CritChance = 0,
+			MultiShot = 1,
+		},
+		Levels = {
+			Damage = 0,
+			ProjectileSpeed = 0,
+			ProjectileSize = 0,
+			FireRate = 0,
+			Range = 0,
+			CritChance = 0,
+			MultiShot = 0,
+		}
+	},
+	Spirits = {}
+}
+
+-- Reconciliación de datos (para futuras actualizaciones)
+local function reconcile(target, template)
+	for key, value in pairs(template) do
+		if target[key] == nil then
+			if type(value) == "table" then
+				target[key] = {}
+				reconcile(target[key], value)
+			else
+				target[key] = value
+			end
+		elseif type(value) == "table" and type(target[key]) == "table" then
+			reconcile(target[key], value)
+		end
+	end
+end
+
+-- Copia profunda
+local function deepCopy(tbl)
+	local copy = {}
+	for k, v in pairs(tbl) do
+		if type(v) == "table" then
+			copy[k] = deepCopy(v)
+		else
+			copy[k] = v
+		end
+	end
+	return copy
+end
+
+-- Cargar datos del jugador
+function DataManager.LoadData(player: Player)
+	local key = "Player_" .. tostring(player.UserId)
+	local data = nil
+
+	local success, result = pcall(function()  
+		return PlayerDataStore:GetAsync(key)  
+	end)  
+
+	if success then  
+		data = result  
+
+		if data then  
+			reconcile(data, DEFAULT_DATA)  
+			data.LastLogin = os.time()  
+			print("💾 [DataManager] Datos cargados para:", player.Name)  
+		else  
+			data = deepCopy(DEFAULT_DATA)  
+			data.LastLogin = os.time()  
+			print("🆕 [DataManager] Nuevo jugador:", player.Name)  
+		end  
+	else  
+		warn("❌ [DataManager] Error al cargar datos de", player.Name, "→", tostring(result))  
+		data = deepCopy(DEFAULT_DATA)  
+		player:SetAttribute("DataLoadFailed", true)  
+	end  
+
+	sessionData[player] = data  
+	return data
+end
+
+-- Guardar datos del jugador
+function DataManager.SaveData(player: Player)
+	local data = sessionData[player]
+	if not data or player:GetAttribute("DataLoadFailed") then return end
+
+	local success, err = pcall(function()  
+		PlayerDataStore:SetAsync("Player_" .. tostring(player.UserId), data)  
+	end)  
+
+	if success then  
+		print("✅ [DataManager] Datos guardados para:", player.Name)  
+	else  
+		warn("❌ [DataManager] Error al guardar datos de", player.Name, "→", tostring(err))  
+	end
+end
+
+-- Autosave cada 5 minutos
+task.spawn(function()
+	while true do
+		task.wait(AUTOSAVE_INTERVAL)
+
+		for player, _ in pairs(sessionData) do  
+			if player and player.Parent then  
+				local ok, err = pcall(function()  
+					DataManager.SaveData(player)  
+				end)  
+
+				if not ok then  
+					warn("⚠️ [DataManager] Error en autosave de", player.Name, "→", tostring(err))  
+				end  
+			end  
+		end  
+	end
+end)
+
+-- Obtener datos del jugador (caché)
+function DataManager.GetData(player: Player)
+	return sessionData[player]
+end
+
+-- Actualizar datos del jugador
+function DataManager.UpdateData(player: Player, callback: (any) -> any)
+	if sessionData[player] then
+		sessionData[player] = callback(sessionData[player])
+	end
+end
+
+-- Descargar jugador (guardar y limpiar)
+function DataManager.UnloadPlayer(player: Player)
+	DataManager.SaveData(player)
+	sessionData[player] = nil
+end
+
+-- ========================================================
+-- FUNCIONES CORREGIDAS: Almacenamiento Seguro de Spirits
+-- ========================================================
+
+-- Guardar un Spirit en un slot específico (Claves forzadas a String)
+function DataManager.SaveSpiritToSlot(player: Player, baseNumber: number, slotNumber: number, spiritName: string, accumulatedEssence: number)
+	local data = sessionData[player]
+	if not data then return false end
+
+	if not data.Spirits then data.Spirits = {} end  
+
+	local baseKey = tostring(baseNumber)  
+	local slotKey = tostring(slotNumber)  
+
+	if not data.Spirits[baseKey] then  
+		data.Spirits[baseKey] = {}  
+	end  
+
+	data.Spirits[baseKey][slotKey] = {  
+		SpiritName = spiritName,  
+		AccumulatedEssence = accumulatedEssence or 0,  
+	}  
+
+	return true
+end
+
+-- Quitar un Spirit de un slot
+function DataManager.RemoveSpiritFromSlot(player: Player, baseNumber: number, slotNumber: number)
+	local data = sessionData[player]
+	local baseKey = tostring(baseNumber)
+	local slotKey = tostring(slotNumber)
+
+	if not data or not data.Spirits or not data.Spirits[baseKey] then  
+		return false  
+	end  
+
+	data.Spirits[baseKey][slotKey] = nil  
+	return true
+end
+
+-- Obtener todos los Spirits de un jugador
+function DataManager.GetPlayerSpirits(player: Player)
+	local data = sessionData[player]
+	if not data or not data.Spirits then
+		return {}
+	end
+	return data.Spirits
+end
+
+-- Obtener los Spirits de una base específica
+function DataManager.GetBaseSpirits(player: Player, baseNumber: number)
+	local data = sessionData[player]
+	local baseKey = tostring(baseNumber)
+
+	if not data or not data.Spirits or not data.Spirits[baseKey] then  
+		return {}  
+	end  
+	return data.Spirits[baseKey]
+end
+-- Guardar Spirit en mano (estado intermedio)
+function DataManager.SetHeldSpirit(player: Player, spiritName: string, previousBase: number, previousSlot: number)
+	local data = sessionData[player]
+	if not data then return false end
+
+	data.HeldSpirit = {
+		SpiritName = spiritName,
+		PreviousBase = tostring(previousBase),
+		PreviousSlot = tostring(previousSlot),
+	}
+	return true
+end
+
+-- Limpiar Spirit en mano
+function DataManager.ClearHeldSpirit(player: Player)
+	local data = sessionData[player]
+	if not data then return false end
+	data.HeldSpirit = nil
+	return true
+end
+
+-- Obtener Spirit en mano
+function DataManager.GetHeldSpirit(player: Player)
+	local data = sessionData[player]
+	if not data then return nil end
+	return data.HeldSpirit
+end
+
+return DataManager
+
+26./FriendAccessSystem
+
+--!strict
+-- FriendAccessSystem
+-- Maneja en memoria el acceso de amigos a las bases (no se guarda en DataStore)
+
+local Players = game:GetService("Players")
+
+local FriendAccessSystem = {}
+
+-- Tabla en memoria: [baseNumber] = true/false
+local friendAccess = {}
+
+-- ==========================================
+-- Activar / Desactivar acceso a amigos
+-- ==========================================
+function FriendAccessSystem.SetAllowFriends(baseNumber: number, state: boolean)
+	friendAccess[baseNumber] = state
+	print("[FriendAccessSystem] Base " .. baseNumber .. " → AllowFriends =", state)
+end
+
+-- Obtener estado actual
+function FriendAccessSystem.GetAllowFriends(baseNumber: number): boolean
+	return friendAccess[baseNumber] == true
+end
+
+-- Alternar estado (toggle)
+function FriendAccessSystem.ToggleAllowFriends(baseNumber: number): boolean
+	local current = friendAccess[baseNumber] == true
+	local newState = not current
+	friendAccess[baseNumber] = newState
+	print("[FriendAccessSystem] Base " .. baseNumber .. " → AllowFriends =", newState)
+	return newState
+end
+
+-- ==========================================
+-- Limpiar cuando el dueño sale del juego
+-- ==========================================
+Players.PlayerRemoving:Connect(function(player)
+	local baseNumber = player:GetAttribute("BaseNumber")
+	if baseNumber then
+		friendAccess[baseNumber] = nil
+		print("[FriendAccessSystem] Base " .. baseNumber .. " reseteada (dueño salió)")
+	end
+end)
+
+-- ==========================================
+-- (Futuro) Verificar si un jugador puede entrar
+-- ==========================================
+function FriendAccessSystem.CanPlayerEnter(baseNumber: number, player: Player): boolean
+	-- Por ahora solo devuelve el estado de AllowFriends
+	-- Más adelante aquí agregaremos la validación de amistad real
+	return friendAccess[baseNumber] == true
+end
+
+print("✅ [FriendAccessSystem] Sistema iniciado")
+
+return FriendAccessSystem
+
+27./SpeedManager
+
+-- ModuleScript: SpeedManager
+-- Ubicación: ServerScriptService
+
+local SpeedManager = {}
+
+-- Jerarquía de velocidades de Tom Studios™
+local SPEED_STUNNED = 0
+local SPEED_BOOST = 40
+local SPEED_SPIRIT = 20
+local SPEED_NORMAL = 22
+
+function SpeedManager.UpdateSpeed(player: Player)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	-- Aplicar velocidad según la prioridad de estados
+	if character:GetAttribute("IsStunned") == true then
+		humanoid.WalkSpeed = SPEED_STUNNED
+	elseif character:GetAttribute("TurretBoost") == true then
+		humanoid.WalkSpeed = SPEED_BOOST
+	elseif character:GetAttribute("HasSpirit") == true then
+		humanoid.WalkSpeed = SPEED_SPIRIT
+	else
+		humanoid.WalkSpeed = SPEED_NORMAL
+	end
+end
+
+-- Función para dar el Boost de la Torreta (El código de 8 líneas integrado)
+function SpeedManager.ApplyTurretBoost(player: Player)
+	local character = player.Character
+	if not character then return end
+
+	character:SetAttribute("TurretBoost", true)
+	SpeedManager.UpdateSpeed(player)
+
+	task.delay(math.random(5, 7), function()
+		if character and character.Parent then
+			character:SetAttribute("TurretBoost", false)
+			SpeedManager.UpdateSpeed(player)
+		end
+	end)
+end
+
+return SpeedManager
+
+28./SpiritPositionManager
+
+--!strict
+-- ModuleScript: SpiritPositionManager
+-- Ubicación: ServerScriptService
+-- Objetivo: Dictador único de la posición, rotación y estética de los Spirits en los slots.
+
+local SpiritPositionManager = {}
+
+type SpiritConfig = {
+	Offset: Vector3,
+	Rotation: Vector3, -- En grados (0 a 360)
+}
+
+-- 📋 TABLA DE CONFIGURACIÓN CENTRALIZADA (CORREGIDA)
+-- Los nombres aquí deben coincidir EXACTAMENTE con tu SpiritDatabase
+local CONFIG_TABLE: { [string]: SpiritConfig } = {
+	["Default"] = {
+		Offset = Vector3.new(0, 2.5, 0),
+		Rotation = Vector3.new(0, 0, 0)
+	},
+	["Espiritu de Tierra"] = {
+		Offset = Vector3.new(0, 2.2, 0), -- ¡Ahora sí puedes bajarlo o subirlo aquí!
+		Rotation = Vector3.new(0, 0, 0)
+	},
+	["Espiritu de Brisa"] = {
+		Offset = Vector3.new(0, 3.5, 0), -- Ajusta su altura de flotación
+		Rotation = Vector3.new(0, 45, 0) -- Rotación estilizada en 45 grados
+	},
+	["Espiritu de Fuego"] = {
+		Offset = Vector3.new(0, 2.5, 0),
+		Rotation = Vector3.new(0, 90, 0)
+	}
+}
+
+-- ⚡ FUNCIÓN CENTRAL: COLOCAR EN SLOT
+function SpiritPositionManager.PlaceInSlot(spirit: Instance, slot: BasePart)
+	if not spirit or not slot then return end
+
+	-- 1. Identificar el Spirit mediante su Atributo de base de datos
+	local spiritName = spirit:GetAttribute("SpiritName") or spirit.Name
+	local config = CONFIG_TABLE[spiritName] or CONFIG_TABLE["Default"]
+
+	-- 2. Calcular el CFrame del objetivo combinando la posición del slot + offsets personalizados
+	local slotCFrame = slot.CFrame
+	local offsetCFrame = CFrame.new(config.Offset) * CFrame.Angles(
+		math.rad(config.Rotation.X),
+		math.rad(config.Rotation.Y),
+		math.rad(config.Rotation.Z)
+	)
+	local targetCFrame = slotCFrame * offsetCFrame
+
+	-- 3. Mover el objeto físicamente (Maneja tanto Parts antiguas como los nuevos Models de Blender)
+	if spirit:IsA("Model") then
+		spirit:PivotTo(targetCFrame)
+	elseif spirit:IsA("BasePart") then
+		spirit.CFrame = targetCFrame
+	end
+
+	-- 4. Asignar jerarquía en el Workspace
+	spirit.Parent = slot
+
+	-- 5. Asegurar físicas (Fijar posición y remover colisiones para evitar lag de físicas)
+	if spirit:IsA("Model") then
+		for _, descendant in ipairs(spirit:GetDescendants()) do
+			if descendant:IsA("BasePart") then
+				descendant.Anchored = true
+				descendant.CanCollide = false
+			end
+		end
+	elseif spirit:IsA("BasePart") then
+		spirit.Anchored = true
+		spirit.CanCollide = false
+	end
+end
+
+return SpiritPositionManager
+
+29./SpiritUtils
+
+--!strict
+-- ModuleScript: SpiritUtils
+-- Ubicación: ServerScriptService
+-- Versión corregida y blindada de Tom Studios™
+
+local SpiritUtils = {}
+
+function SpiritUtils.GetPrimaryPart(spirit: Instance): BasePart?
+	if spirit:IsA("BasePart") then
+		return spirit
+	elseif spirit:IsA("Model") then
+		if spirit.PrimaryPart then
+			return spirit.PrimaryPart
+		end
+		-- Intenta asignar automáticamente la primera parte como PrimaryPart
+		for _, child in ipairs(spirit:GetChildren()) do
+			if child:IsA("BasePart") then
+				spirit.PrimaryPart = child
+				warn("[SpiritUtils] PrimaryPart asignada automáticamente a:", spirit.Name)
+				return child
+			end
+		end
+	end
+	return nil
+end
+
+function SpiritUtils.SetPosition(spirit: Instance, position: Vector3)
+	local primary = SpiritUtils.GetPrimaryPart(spirit)
+	if not primary then 
+		warn("[SpiritUtils] No se pudo obtener PrimaryPart de:", spirit.Name)
+		return 
+	end
+
+	if spirit:IsA("Model") then
+		spirit:PivotTo(CFrame.new(position))
+	else
+		primary.Position = position
+	end
+end
+
+function SpiritUtils.SetAnchored(spirit: Instance, anchored: boolean)
+	if spirit:IsA("BasePart") then
+		spirit.Anchored = anchored
+	elseif spirit:IsA("Model") then
+		for _, part in ipairs(spirit:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Anchored = anchored
+			end
+		end
+	end
+end
+
+function SpiritUtils.PlaceInSlot(spirit: Instance, slot: BasePart)
+	local primary = SpiritUtils.GetPrimaryPart(spirit)
+	if not primary then return end
+
+	-- Rotación correctiva para los modelos
+	local correctiveRotation = CFrame.Angles(math.rad(-90), 0, 0) 
+
+	local targetCFrame = slot.CFrame * CFrame.new(0, 2.5, 0) * correctiveRotation
+	SpiritUtils.SetCFrame(spirit, targetCFrame)
+end
+
+function SpiritUtils.UpdateCarriedOrientation(spirit: Instance, player: Player)
+	local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	-- Offset + rotación para que mire hacia adelante
+	local offset = CFrame.new(0, 0.8, -3.2) 
+		* CFrame.Angles(math.rad(-20), math.rad(180), 0) 
+
+	SpiritUtils.SetCFrame(spirit, hrp.CFrame * offset)
+end
+
+function SpiritUtils.SetCanCollide(spirit: Instance, canCollide: boolean)
+	if spirit:IsA("BasePart") then
+		spirit.CanCollide = canCollide
+	elseif spirit:IsA("Model") then
+		for _, part in ipairs(spirit:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.CanCollide = canCollide
+			end
+		end
+	end
+end
+
+function SpiritUtils.SetCFrame(spirit: Instance, cframe: CFrame)
+	local primary = SpiritUtils.GetPrimaryPart(spirit)
+	if not primary then return end
+
+	if spirit:IsA("Model") then
+		spirit:PivotTo(cframe)
+	else
+		primary.CFrame = cframe
+	end
+end
+
+function SpiritUtils.ClearVelocities(spirit: Instance)
+	if spirit:IsA("BasePart") then
+		spirit.Velocity = Vector3.zero
+		spirit.AssemblyLinearVelocity = Vector3.zero
+		spirit.AssemblyAngularVelocity = Vector3.zero
+	elseif spirit:IsA("Model") then
+		for _, part in ipairs(spirit:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Velocity = Vector3.zero
+				part.AssemblyLinearVelocity = Vector3.zero
+				part.AssemblyAngularVelocity = Vector3.zero
+			end
+		end
+	end
+end
+
+function SpiritUtils.SetupSpirit(spirit: Instance)
+	SpiritUtils.GetPrimaryPart(spirit) -- Fuerza la asignación automática si falta
+end
+
+-- Detecta si un objeto es un Spirit basándose en atributos
+function SpiritUtils.IsSpirit(instance: Instance): boolean
+	if not instance then return false end
+	return instance:GetAttribute("SpiritState") ~= nil
+		or instance:GetAttribute("EssenceRate") ~= nil
+end
+
+-- Obtiene el Spirit dentro de un slot si existe (¡YA PURGADO!)
+function SpiritUtils.GetSpiritInSlot(slot: Instance): Instance?
+	if not slot then return nil end
+	for _, child in ipairs(slot:GetChildren()) do
+		if SpiritUtils.IsSpirit(child) then
+			return child
+		end
+	end
+	return nil
+end
+
+return SpiritUtils
+
+30./TurretStats
+
+--!strict
+-- ModuleScript: TurretStats
+-- Ubicación: ServerScriptService
+
+local ServerScriptService = game:GetService("ServerScriptService")
+local DataManager = require(ServerScriptService:WaitForChild("DataManager"))
+
+local TurretStats = {}
+
+-- Costos por nivel (índice = nivel al que subes)
+local UPGRADE_COSTS = {100, 250, 500, 900, 1400, 2000, 2750, 3750, 5000, 7000}
+
+-- Valores base
+local DEFAULT_STATS = {
+	Damage = 10,
+	ProjectileSpeed = 450,
+	ProjectileSize = 4,
+	FireRate = 0.15,
+	Range = 200,
+	CritChance = 0,
+	MultiShot = 1,
+}
+
+-- Cuánto sube cada stat por nivel
+local UPGRADE_VALUES = {
+	Damage = 10,
+	ProjectileSpeed = 50,
+	ProjectileSize = 0.5,
+	FireRate = -0.01,
+	Range = 50,
+	CritChance = 0.03,
+	MultiShot = 0.5,
+}
+
+local playerStats = {}
+
+-- Inicializar stats (carga desde DataManager)
+function TurretStats.Init(player)
+	local data = DataManager.GetData(player)
+	if not data then
+		DataManager.LoadData(player)
+		data = DataManager.GetData(player)
+	end
+
+	-- Si no existe la estructura correcta, la creamos
+	if not data.Turret or not data.Turret.Stats or not data.Turret.Levels then
+		data.Turret = {
+			Stats = table.clone(DEFAULT_STATS),
+			Levels = {
+				Damage = 0,
+				ProjectileSpeed = 0,
+				ProjectileSize = 0,
+				FireRate = 0,
+				Range = 0,
+				CritChance = 0,
+				MultiShot = 0,
+			}
+		}
+	end
+
+	playerStats[player.UserId] = data.Turret
+end
+
+-- Obtener un stat actual
+function TurretStats.Get(player, statName)
+	local data = playerStats[player.UserId]
+	if not data or not data.Stats then 
+		return DEFAULT_STATS[statName] 
+	end
+	return data.Stats[statName]
+end
+
+-- Obtener nivel actual de un stat
+function TurretStats.GetLevel(player, statName)
+	local data = playerStats[player.UserId]
+	if not data or not data.Levels then 
+		return 0 
+	end
+	return data.Levels[statName]
+end
+
+-- Obtener costo del siguiente nivel
+function TurretStats.GetUpgradeCost(player, statName)
+	local currentLevel = TurretStats.GetLevel(player, statName)
+	if currentLevel >= 10 then return nil end
+	return UPGRADE_COSTS[currentLevel + 1]
+end
+
+-- Aplicar mejora y guardar en DataManager
+function TurretStats.Upgrade(player, statName)
+	local data = playerStats[player.UserId]
+	if not data or not data.Stats or not data.Levels then 
+		return false 
+	end
+
+	local currentLevel = data.Levels[statName]
+	if currentLevel >= 10 then return false end
+
+	-- Subir nivel
+	data.Levels[statName] = currentLevel + 1
+
+	-- Calcular nuevo valor del stat
+	data.Stats[statName] = DEFAULT_STATS[statName] + (UPGRADE_VALUES[statName] * data.Levels[statName])
+
+	-- Reglas especiales
+	if statName == "MultiShot" then
+		data.Stats[statName] = math.max(1, math.floor(DEFAULT_STATS.MultiShot + (UPGRADE_VALUES.MultiShot * data.Levels[statName])))
+	end
+
+	if statName == "FireRate" then
+		data.Stats[statName] = math.max(0.05, data.Stats[statName])
+	end
+
+	-- Guardar cambios en DataManager
+	DataManager.UpdateData(player, function(currentData)
+		currentData.Turret = data
+		return currentData
+	end)
+
+	return true
+end
+
+-- Limpiar cuando el jugador sale
+function TurretStats.Remove(player)
+	playerStats[player.UserId] = nil
+end
+
+return TurretStats
+
+
+
+ServerStorage
+
+Adentro hay un panel llamado AdminGui, y ahi hay un localscript que tiene esto
+
+--!strict
+-- LocalScript dentro de AdminGui
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local adminFolder = ReplicatedStorage:WaitForChild("AdminEvents")
+local AdminCommand = adminFolder:WaitForChild("AdminCommand")
+local AdminResponse = adminFolder:WaitForChild("AdminResponse")
+
+local gui = script.Parent
+local mainFrame = gui:WaitForChild("MainFrame")
+local toggleButton = gui:WaitForChild("ToggleButton")
+local logLabel = mainFrame:WaitForChild("LogLabel")
+local playerInput = mainFrame:WaitForChild("PlayerInput")
+
+local scrollContainer = mainFrame:WaitForChild("ScrollContainer")
+local econTab = scrollContainer:WaitForChild("EconFrame")
+local testTab = scrollContainer:WaitForChild("TestFrame")
+local modTab = scrollContainer:WaitForChild("ModFrame")
+
+mainFrame.Visible = false
+local isFlying = false
+
+-- ==========================================
+-- TOGGLE PANEL
+-- ==========================================
+toggleButton.MouseButton1Click:Connect(function()
+	mainFrame.Visible = not mainFrame.Visible
+end)
+
+-- ==========================================
+-- LOG
+-- ==========================================
+local function log(msg)
+	logLabel.Text = msg
+	task.delay(4, function()
+		if logLabel.Text == msg then
+			logLabel.Text = ""
+		end
+	end)
+end
+
+-- ==========================================
+-- VUELO CORREGIDO
+-- ==========================================
+local bodyGyro = nil
+local bodyVelocity = nil
+
+local function enableFly()
+	local character = player.Character
+	if not character then return end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character:FindFirstChild("Humanoid")
+	if not root or not humanoid then return end
+
+	humanoid.PlatformStand = true
+
+	bodyGyro = Instance.new("BodyGyro")
+	bodyGyro.MaxTorque = Vector3.new(4000, 4000, 4000)
+	bodyGyro.D = 100
+	bodyGyro.CFrame = root.CFrame
+	bodyGyro.Parent = root
+
+	bodyVelocity = Instance.new("BodyVelocity")
+	bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+	bodyVelocity.Velocity = Vector3.zero
+	bodyVelocity.Parent = root
+end
+
+local function disableFly()
+	local character = player.Character
+	if not character then return end
+	local humanoid = character:FindFirstChild("Humanoid")
+	if humanoid then
+		humanoid.PlatformStand = false
+	end
+
+	if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
+	if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
+end
+
+RunService.Heartbeat:Connect(function()
+	if not isFlying then return end
+	local character = player.Character
+	if not character then return end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root or not bodyVelocity or not bodyGyro then return end
+
+	local speed = 50
+	local moveDir = Vector3.zero
+	local camera = workspace.CurrentCamera
+
+	if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir += camera.CFrame.LookVector end
+	if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir -= camera.CFrame.LookVector end
+	if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir -= camera.CFrame.RightVector end
+	if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir += camera.CFrame.RightVector end
+	if UserInputService:IsKeyDown(Enum.KeyCode.E) then moveDir += Vector3.new(0, 1, 0) end
+	if UserInputService:IsKeyDown(Enum.KeyCode.Q) then moveDir -= Vector3.new(0, 1, 0) end
+
+	if moveDir.Magnitude > 0 then
+		bodyVelocity.Velocity = moveDir.Unit * speed
+	else
+		bodyVelocity.Velocity = Vector3.zero
+	end
+
+	-- El personaje mira hacia donde va la cámara
+	bodyGyro.CFrame = CFrame.new(root.Position, root.Position + camera.CFrame.LookVector)
+end)
+
+AdminResponse.OnClientEvent:Connect(function(msg)
+	if msg == "FlyToggle" then
+		isFlying = not isFlying
+		if isFlying then
+			enableFly()
+			log("✅ Vuelo activado - WASD mover, E subir, Q bajar")
+		else
+			disableFly()
+			log("✅ Vuelo desactivado")
+		end
+	end
+end)
+
+-- ==========================================
+-- HELPER
+-- ==========================================
+local function getTarget()
+	local name = playerInput.Text
+	if name == "" then return player.Name end
+	return name
+end
+
+-- ==========================================
+-- BOTONES ECONOMÍA
+-- ==========================================
+local amountInput = econTab:WaitForChild("AmountInput")
+
+econTab:WaitForChild("AddBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("AddEsencia", getTarget(), tonumber(amountInput.Text) or 0)
+end)
+
+econTab:WaitForChild("SetBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("SetEsencia", getTarget(), tonumber(amountInput.Text) or 0)
+end)
+
+econTab:WaitForChild("ZeroBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("ZeroEsencia", getTarget())
+end)
+
+econTab:WaitForChild("MaxBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("MaxEsencia", getTarget())
+end)
+
+-- ==========================================
+-- BOTONES TESTING
+-- ==========================================
+local speedInput = testTab:WaitForChild("SpeedInput")
+
+testTab:WaitForChild("ResetTurretBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("ResetTurret", getTarget())
+end)
+
+testTab:WaitForChild("SetSpeedBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("SetSpeed", getTarget(), tonumber(speedInput.Text) or 16)
+end)
+
+testTab:WaitForChild("FlyBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("ToggleFly")
+end)
+-- Spawn Spirit
+local spiritNameInput = testTab:WaitForChild("SpiritNameInput")
+
+testTab:WaitForChild("SpawnSpiritBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("SpawnSpirit", getTarget(), spiritNameInput.Text)
+end)
+
+-- ==========================================
+-- BOTONES CAJAS
+-- ==========================================
+testTab:WaitForChild("SpawnBoxBtn").MouseButton1Click:Connect(function()
+	local rarityInput = testTab:WaitForChild("RarityInput")
+	AdminCommand:FireServer("SpawnBox", rarityInput.Text)
+end)
+
+testTab:WaitForChild("ClearBoxesBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("ClearBoxes")
+end)
+
+testTab:WaitForChild("StopBoxesBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("ToggleBoxSpawner")
+end)
+
+-- ==========================================
+-- BOTONES MODERACIÓN
+-- ==========================================
+modTab:WaitForChild("KickBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("Kick", getTarget())
+end)
+
+modTab:WaitForChild("BanBtn").MouseButton1Click:Connect(function()
+	AdminCommand:FireServer("Ban", getTarget())
+end)
+
+
+StarterGui
+
+FriendAccessTeleportGui 
+localscript
+
+--!strict
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local gui = script.Parent
+local mainFrame = gui:WaitForChild("MainFrame")
+local teleportButton = mainFrame:WaitForChild("TeleportButton")
+local closeButton = mainFrame:WaitForChild("CloseButton")
+
+local requestTeleport = ReplicatedStorage:WaitForChild("RequestTeleportToBase")
+local openFriendGui = ReplicatedStorage:WaitForChild("OpenFriendTeleportGui")
+
+gui.Enabled = false
+
+-- Abrir GUI via RemoteEvent (fix Bug 2)
+openFriendGui.OnClientEvent:Connect(function(baseNumber)
+	gui:SetAttribute("TargetBase", baseNumber)
+	gui.Enabled = true
+end)
+
+-- Botón de teletransporte
+teleportButton.MouseButton1Click:Connect(function()
+	local baseNumber = gui:GetAttribute("TargetBase")
+	if baseNumber then
+		requestTeleport:FireServer(baseNumber)
+		gui.Enabled = false
+	end
+end)
+
+-- Botón de cerrar
+closeButton.MouseButton1Click:Connect(function()
+	gui.Enabled = false
+end)
+
+FuseBoxGui
+MiniGameLogic *localScript*
+
+local gui = script.Parent
+local frame = gui:WaitForChild("MainFrame")
+local buttonContainer = frame:WaitForChild("ButtonContainer")
+
+local player = game.Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local StartMiniGameEvent = ReplicatedStorage:WaitForChild("StartMiniGameEvent")
+local MiniGameResultEvent = ReplicatedStorage:WaitForChild("MiniGameResultEvent")
+
+-- ====================== SONIDOS ======================
+local successSound = script.Parent:FindFirstChild("SuccessSound")
+local errorSound = script.Parent:FindFirstChild("ErrorSound")
+local clickSound = script.Parent:FindFirstChild("ClickSound")
+
+-- ====================== ESTILO DEL FONDO (Metálico) ======================
+frame.BackgroundColor3 = Color3.fromRGB(45, 45, 50)           -- Gris oscuro metálico
+frame.BackgroundTransparency = 0.1
+
+local frameStroke = Instance.new("UIStroke")
+frameStroke.Thickness = 4
+frameStroke.Color = Color3.fromRGB(180, 180, 190)             -- Borde plateado
+frameStroke.Parent = frame
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 12)
+frameCorner.Parent = frame
+
+-- ====================== TÍTULO ======================
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.Size = UDim2.new(1, 0, 0, 50)
+title.Position = UDim2.new(0, 0, 0, 10)
+title.BackgroundTransparency = 1
+title.Text = "SIGUE LA SECUENCIA"
+title.TextColor3 = Color3.fromRGB(220, 220, 230)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.TextStrokeTransparency = 0.3
+title.Parent = frame
+
+-- ====================== BOTONES DE COLORES ======================
+local buttons = {
+	Red = buttonContainer:WaitForChild("RedButton"),
+	Green = buttonContainer:WaitForChild("GreenButton"),
+	Blue = buttonContainer:WaitForChild("BlueButton"),
+	Yellow = buttonContainer:WaitForChild("YellowButton")
+}
+
+local colors = {"Red", "Green", "Blue", "Yellow"}
+local sequence = {}
+local playerInput = {}
+local isPlayingSequence = false
+local gameActive = false
+local currentRound = 1
+local maxRounds = 3
+local currentBaseId = nil
+
+local originalColors = {}
+for color, button in pairs(buttons) do
+	originalColors[color] = button.BackgroundColor3
+
+	-- Estilo de botón con profundidad y forma circular
+	button.Size = UDim2.new(0, 90, 0, 90)
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.5, 0)           -- Muy redondeado
+	corner.Parent = button
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 5
+	stroke.Color = Color3.fromRGB(30, 30, 30)
+	stroke.Parent = button
+end
+
+-- ====================== FUNCIONES ======================
+
+local function flashButton(colorName, duration)
+	local button = buttons[colorName]
+	button.BackgroundColor3 = Color3.new(1, 1, 1)
+	task.wait(duration or 0.4)
+	button.BackgroundColor3 = originalColors[colorName]
+end
+
+local function playSequence()
+	isPlayingSequence = true
+	gameActive = false
+
+	for _, color in ipairs(sequence) do
+		flashButton(color, 0.4)
+		task.wait(0.25)
+	end
+
+	isPlayingSequence = false
+	gameActive = true
+	playerInput = {}
+end
+
+local function generateSequence(length)
+	sequence = {}
+	playerInput = {}
+	for i = 1, length do
+		table.insert(sequence, colors[math.random(1, #colors)])
+	end
+end
+
+local function checkSequence()
+	if #playerInput ~= #sequence then return false end
+	for i, color in ipairs(playerInput) do
+		if color ~= sequence[i] then return false end
+	end
+	return true
+end
+
+local function startNewRound()
+	local length = 2 + currentRound
+	generateSequence(length)
+	playSequence()
+end
+
+local function onButtonPressed(color)
+	if not gameActive or isPlayingSequence then return end
+
+	table.insert(playerInput, color)
+
+	if clickSound then clickSound:Play() end
+
+	flashButton(color, 0.2)
+
+	if #playerInput == #sequence then
+		if checkSequence() then
+			print("✅ Ronda " .. currentRound .. " completada")
+
+			if currentRound >= maxRounds then
+				print("✅ ¡Mini-juego completado!")
+				gameActive = false
+
+				if successSound then successSound:Play() end
+
+				if currentBaseId then
+					MiniGameResultEvent:FireServer(currentBaseId, true)
+				end
+
+				gui.Enabled = false
+			else
+				currentRound = currentRound + 1
+				gameActive = false
+				task.wait(1)
+				startNewRound()
+			end
+		else
+			print("❌ Fallaste la secuencia")
+			gameActive = false
+
+			if errorSound then errorSound:Play() end
+
+			if currentBaseId then
+				MiniGameResultEvent:FireServer(currentBaseId, false)
+			end
+
+			task.wait(0.8)
+			gui.Enabled = false
+		end
+	end
+end
+
+for color, button in pairs(buttons) do
+	button.MouseButton1Click:Connect(function()
+		onButtonPressed(color)
+	end)
+end
+
+-- ====================== BOTÓN DE CERRAR (X) ======================
+
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 40, 0, 40)
+closeButton.Position = UDim2.new(1, -50, 0, 10)
+closeButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextScaled = true
+closeButton.Font = Enum.Font.GothamBold
+closeButton.Parent = frame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 10)
+closeCorner.Parent = closeButton
+
+closeButton.MouseButton1Click:Connect(function()
+	if clickSound then clickSound:Play() end
+
+	if currentBaseId then
+		MiniGameResultEvent:FireServer(currentBaseId, false)
+	end
+
+	gui.Enabled = false
+end)
+
+-- ====================== INICIO DEL MINI-JUEGO ======================
+
+StartMiniGameEvent.OnClientEvent:Connect(function(baseId)
+	currentBaseId = baseId
+	currentRound = 1
+	playerInput = {}
+	sequence = {}
+	gameActive = false
+	isPlayingSequence = false
+
+	gui.Enabled = true
+	task.wait(0.6)
+	startNewRound()
+end)
+
+print("✅ MiniGameLogic con diseño mejorado (fondo metálico + botones redondos)")
+
+OpenGUI *localScript*
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local gui = script.Parent
+
+-- Busca cualquier ProximityPrompt dentro de base1
+local prompt = Workspace.base1:FindFirstChildWhichIsA("ProximityPrompt", true)
+
+if prompt then
+	prompt.Triggered:Connect(function(triggeredPlayer)
+		if triggeredPlayer == player then
+			gui.Enabled = true
+		end
+	end)
+	print("✅ ProximityPrompt encontrado y conectado")
+else
+	warn("❌ No se encontró ProximityPrompt")
+end
+
+TimerDisplay *localScript*
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local OpenBaseEvent = ReplicatedStorage:WaitForChild("OpenBaseEvent")
+
+local player = game.Players.LocalPlayer
+
+local function createTimer(baseNumber, mode)
+	-- Buscar la base correcta dinámicamente
+	local baseModel = Workspace:FindFirstChild("base" .. baseNumber)
+	if not baseModel then
+		warn("No se encontró base" .. baseNumber)
+		return
+	end
+
+	local based = baseModel:FindFirstChild("based")
+	local caja = based and based:FindFirstChild("caja de fusible")
+	local promptPart = caja and caja:FindFirstChild("PromptPart")
+
+	if not promptPart then
+		warn("No se encontró PromptPart en base" .. baseNumber)
+		return
+	end
+
+	-- Eliminar timer anterior si existe (evita duplicados)
+	local oldBillboard = promptPart:FindFirstChild("TimerBillboard")
+	if oldBillboard then
+		oldBillboard:Destroy()
+	end
+
+	-- Crear BillboardGui
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "TimerBillboard"
+	billboard.Size = UDim2.new(0, 120, 0, 50)
+	billboard.StudsOffset = Vector3.new(0, 4.5, 0)
+	billboard.AlwaysOnTop = true
+	billboard.MaxDistance = 80
+	billboard.Adornee = promptPart
+	billboard.Parent = promptPart
+
+	local label = Instance.new("TextLabel")
+	label.Name = "TimerLabel"
+	label.Size = UDim2.new(1, 0, 1, 0)
+	label.BackgroundTransparency = 1
+	label.TextScaled = true
+	label.Font = Enum.Font.GothamBold
+	label.TextStrokeTransparency = 0.3
+	label.Parent = billboard
+
+	-- Determinar duración y estilo según el modo
+	local duration = 25
+	local isCooldown = (mode == "cooldown")
+
+	if isCooldown then
+		duration = 60
+		label.TextColor3 = Color3.fromRGB(255, 200, 50) -- Amarillo/naranja (corto circuito)
+	else
+		label.TextColor3 = Color3.fromRGB(255, 255, 255) -- Blanco normal
+	end
+
+	-- Crear efecto de chispas SOLO en modo cooldown
+	local sparks
+	if isCooldown then
+		sparks = Instance.new("ParticleEmitter")
+		sparks.Parent = promptPart
+		sparks.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 220, 80)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 200))
+		})
+		sparks.Size = NumberSequence.new(0.15, 0.05)
+		sparks.Lifetime = NumberRange.new(0.15, 0.45)
+		sparks.Rate = 35
+		sparks.Speed = NumberRange.new(4, 10)
+		sparks.SpreadAngle = Vector2.new(360, 360)
+		sparks.LightEmission = 1
+		sparks.LightInfluence = 0
+		sparks.Acceleration = Vector3.new(0, -15, 0)
+	end
+
+	-- Contador
+	for i = duration, 1, -1 do
+		if not label or not label.Parent then break end
+		label.Text = i .. "s"
+
+		-- Efecto de parpadeo rápido en cooldown
+		if isCooldown then
+			label.TextColor3 = (i % 2 == 0) 
+				and Color3.fromRGB(255, 180, 30) 
+				or Color3.fromRGB(255, 240, 100)
+		end
+
+		task.wait(1)
+	end
+
+	-- Limpiar todo al terminar
+	if billboard and billboard.Parent then
+		billboard:Destroy()
+	end
+
+	if sparks and sparks.Parent then
+		sparks:Destroy()
+	end
+
+	print("Timer finalizado en base" .. baseNumber)
+end
+
+-- Escuchar el evento del servidor
+OpenBaseEvent.OnClientEvent:Connect(function(baseNumber, mode)
+	createTimer(baseNumber, mode)
+end)
+
+print("✅ TimerDisplay cargado correctamente (con soporte para cooldown + chispas)")
+
+MobileTurretGui
+dentro hay un textbutton llamado TurretShooting y dentro hay un localScript
+
+-- LocalScript dentro del ShootButton
+-- Ubicación: StarterGui -> MobileTurretGui -> ShootButton
+
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local ShootEvent = ReplicatedStorage:WaitForChild("ShootTurret")
+local player = Players.LocalPlayer
+local button = script.Parent
+local screenGui = button.Parent
+
+local isHolding = false
+local heartbeatConnection: RBXScriptConnection? = nil
+local seatedConnection: RBXScriptConnection? = nil
+
+-- 1. SEGURIDAD: Si no es un dispositivo táctil, destruimos la interfaz
+if not UserInputService.TouchEnabled then
+	screenGui:Destroy()
+	return
+end
+
+-- El botón inicia oculto siempre
+button.Visible = false
+
+-- 2. FUNCIÓN DE DISPARO CONTINUO
+local function startShootingLoop()
+	if heartbeatConnection then heartbeatConnection:Disconnect() end
+
+	heartbeatConnection = RunService.Heartbeat:Connect(function()
+		if not isHolding then
+			if heartbeatConnection then heartbeatConnection:Disconnect() end
+			return
+		end
+
+		local camera = workspace.CurrentCamera
+		if camera then
+			local firePosition = camera.CFrame.Position
+			local fireDirection = camera.CFrame.LookVector
+
+			-- Envía los datos al script de siempre (TurretShooting)
+			ShootEvent:FireServer(firePosition, fireDirection)
+		end
+	end)
+end
+
+-- 3. LÓGICA DE DETECCIÓN DE ASIENTO (Corregida con paréntesis)
+local function onSeated(isSeated, seatPart)
+	if isSeated and seatPart and (seatPart:IsA("Seat") or seatPart:IsA("VehicleSeat") or seatPart.Name:lower():find("turret")) then
+		button.Visible = true
+	else
+		-- Limpieza inmediata si se baja
+		isHolding = false
+		button.Visible = false
+		if heartbeatConnection then heartbeatConnection:Disconnect() end
+	end
+end
+
+-- 4. CONECTOR ROBUSTO (Evita el bug que descubrió ChatGPT)
+local function setupCharacter(character)
+	-- Limpiamos conexiones viejas si existen
+	if seatedConnection then seatedConnection:Disconnect() end
+
+	local humanoid = character:WaitForChild("Humanoid", 5)
+	if humanoid then
+		seatedConnection = humanoid.Seated:Connect(onSeated)
+
+		-- Por si el script carga y el jugador YA estaba sentado en la torreta
+		if humanoid.SeatPart then
+			onSeated(true, humanoid.SeatPart)
+		end
+	end
+end
+
+-- Escuchar cuando el jugador reviva en el futuro
+player.CharacterAdded:Connect(setupCharacter)
+
+-- ¡SOLUCIÓN! Si el personaje ya existe justo ahora, lo configuramos de una vez
+if player.Character then
+	setupCharacter(player.Character)
+end
+
+-- 5. CAPTURAR EL HOLD (MANTENER PRESIONADO)
+button.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		isHolding = true
+		startShootingLoop()
+	end
+end)
+
+button.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		isHolding = false
+	end
+end)
+
+
+StarterPack
+
+Crowbar
+CrowbarServer *script*
+
+-- Script: CrowbarServer (CORREGIDO)
+-- Ubicación: StarterPack -> Crowbar
+
+local Tool = script.Parent
+local AttackEvent = Tool:WaitForChild("CrowbarAttack")
+local ServerScriptService = game:GetService("ServerScriptService")
+local SpeedManager = require(ServerScriptService:WaitForChild("SpeedManager"))
+
+local COOLDOWN = 0.6
+local DAMAGE = 25
+local lastAttack = {}
+
+AttackEvent.OnServerEvent:Connect(function(player)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	if not character or not rootPart or character:GetAttribute("IsStunned") then return end
+
+	-- Cooldown Anti-Spam
+	local now = tick()
+	if lastAttack[player] and (now - lastAttack[player]) < COOLDOWN then return end
+	lastAttack[player] = now
+
+	local hitBoxParam = OverlapParams.new()
+	hitBoxParam.FilterDescendantsInstances = {character}
+	hitBoxParam.FilterType = Enum.RaycastFilterType.Exclude
+
+	local hitTargets = {}
+
+	-- ========================================================
+	-- 📦 HITBOX 1: DETECCIÓN DE CAJAS (Grande y Ajustada al Nombre)
+	-- ========================================================
+	-- Detección de 12x12x12 hacia el frente
+	local boxHitParts = workspace:GetPartBoundsInBox(rootPart.CFrame * CFrame.new(0, 0, 0), Vector3.new(12, 12, 12), hitBoxParam)
+	local boxHit = false
+
+	for _, part in pairs(boxHitParts) do
+		-- Buscar la caja en el part mismo o en su padre
+		local box = nil
+		if string.find(part.Name, "Caja_") and part.Anchored == true then
+			box = part
+		elseif part.Parent and string.find(part.Parent.Name, "Caja_") and part.Parent:FindFirstChild("Health") then
+			box = part.Parent
+		end
+
+		if box and not hitTargets[box] then
+			hitTargets[box] = true
+			_G.DamageBox(box, DAMAGE, player)
+			boxHit = true
+			break
+		end
+	end
+	
+
+	-- Si golpeamos una caja, no permitimos golpear jugadores en el mismo ataque
+	if boxHit then return end
+
+	-- ========================================================
+	-- 👤 HITBOX 2: DETECCIÓN DE JUGADORES (4x4x5)
+	-- ========================================================
+	local playerHitParts = workspace:GetPartBoundsInBox(rootPart.CFrame * CFrame.new(0, 0, -3), Vector3.new(4, 4, 5), hitBoxParam)
+
+	for _, part in pairs(playerHitParts) do
+		local targetChar = part.Parent
+		local targetHumanoid = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+
+		if targetHumanoid and targetHumanoid.Health > 0 and not targetChar:GetAttribute("IsStunned") then
+			local targetPlayer = game.Players:GetPlayerFromCharacter(targetChar)
+			local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+
+			if targetPlayer and targetRoot and not hitTargets[targetChar] then
+				hitTargets[targetChar] = true
+
+				-- Soltar Spirit
+				if targetChar:GetAttribute("HasSpirit") then
+					targetChar:SetAttribute("HasSpirit", false)
+					SpeedManager.UpdateSpeed(targetPlayer)
+					-- Aquí tu función global de dropeo: _G.DropSpirit(targetPlayer)
+				end
+
+				-- Aplicar Stun
+				targetChar:SetAttribute("IsStunned", true)
+				SpeedManager.UpdateSpeed(targetPlayer)
+				targetHumanoid:UnequipTools()
+				targetHumanoid.PlatformStand = true
+
+				-- Física de Empuje
+				local pushDirection = (targetRoot.Position - rootPart.Position).Unit
+				targetRoot.AssemblyLinearVelocity = (pushDirection * 50) + Vector3.new(0, 30, 0)
+
+				-- Recuperación
+				task.spawn(function()
+					task.wait(0.5)
+					while targetRoot and targetRoot.AssemblyLinearVelocity.Magnitude > 1 do
+						task.wait(0.1)
+					end
+					task.wait(math.random(3, 5) / 10)
+					if targetChar and targetHumanoid then
+						targetHumanoid.PlatformStand = false
+						targetChar:SetAttribute("IsStunned", false)
+						SpeedManager.UpdateSpeed(targetPlayer)
+					end
+				end)
+				break 
+			end
+		end
+	end
+end)
+
+CrowbarLocal *localscript*
+
+-- LocalScript: CrowbarLocal
+-- Ubicación: StarterPack -> Crowbar
+
+local Tool = script.Parent
+local AttackEvent = Tool:WaitForChild("CrowbarAttack")
+local Players = game:GetService("Players")
+
+local COOLDOWN = 0.6
+local onCooldown = false
+
+Tool.Activated:Connect(function()
+	local character = Players.LocalPlayer.Character
+	if onCooldown or (character and character:GetAttribute("IsStunned")) then return end
+
+	onCooldown = true
+	AttackEvent:FireServer() -- Avisa al servidor que queremos golpear
+
+	task.wait(COOLDOWN)
+	onCooldown = false
+end)
+
+
+StarterPlayer
+Dentro esta el StarterPlayerScripts
+
+CarryingRestriction *localScript*
+
+--!strict
+-- CarryingRestrictions (Versión mejorada)
+-- Oculta hotbar y desequipa herramientas mientras se lleva un Spirit
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+
+local player = Players.LocalPlayer
+
+local function updateHotbar(isCarrying: boolean)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+	if not humanoid then return end
+
+	if isCarrying then
+		humanoid:UnequipTools()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+	else
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
+	end
+end
+
+local function setupRestrictions(character: Model)
+	local lastState = player:GetAttribute("IsCarryingSpirit") == true
+	updateHotbar(lastState)
+
+	-- Escuchar cambios del atributo
+	player:GetAttributeChangedSignal("IsCarryingSpirit"):Connect(function()
+		local isCarrying = player:GetAttribute("IsCarryingSpirit") == true
+		if isCarrying ~= lastState then
+			lastState = isCarrying
+			updateHotbar(isCarrying)
+		end
+	end)
+
+	-- Chequeo de seguridad cada 0.2 segundos (por si el signal falla en algún caso)
+	RunService.Heartbeat:Connect(function()
+		local currentState = player:GetAttribute("IsCarryingSpirit") == true
+		if currentState ~= lastState then
+			lastState = currentState
+			updateHotbar(currentState)
+		end
+	end)
+end
+
+player.CharacterAdded:Connect(setupRestrictions)
+
+if player.Character then
+	setupRestrictions(player.Character)
+end
+
+DamageIndicator *localScript*
+
+-- LocalScript: DamageIndicator (Ubicación recomendada: StarterPlayerScripts)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local showDamage = ReplicatedStorage:WaitForChild("ShowDamage")
+
+showDamage.OnClientEvent:Connect(function(damageAmount, boxPosition)
+	-- Crear un punto de anclaje temporal e invisible en el mundo tridimensional
+	local attachment = Instance.new("Attachment")
+	attachment.WorldPosition = boxPosition + Vector3.new(0, 2, 0) -- Aparece un poquito arriba de la caja
+	attachment.Parent = Workspace.Terrain
+
+	-- Crear la interfaz del indicador
+	local billboard = Instance.new("BillboardGui")
+	billboard.Size = UDim2.new(0, 140, 0, 40)
+	billboard.AlwaysOnTop = true
+	billboard.Adornee = attachment
+	billboard.Parent = player:WaitForChild("PlayerGui")
+
+	-- El texto que muestra el daño
+	local textLabel = Instance.new("TextLabel")
+	textLabel.Size = UDim2.new(1, 0, 1, 0)
+	textLabel.BackgroundTransparency = 1
+	textLabel.Text = "-" .. tostring(damageAmount)
+	textLabel.Font = Enum.Font.GothamBold
+	textLabel.TextSize = 22
+
+	-- Color dinámico: Si el daño es devastador, se pone rojo intenso
+	if damageAmount >= 1000 then
+		textLabel.TextColor3 = Color3.fromRGB(255, 30, 30)
+		textLabel.TextSize = 28
+	else
+		textLabel.TextColor3 = Color3.fromRGB(255, 160, 20) -- Naranja/Amarillo estándar
+	end
+
+	-- Borde negro para que se lea perfecto en cualquier fondo del mapa
+	textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	textLabel.TextStrokeTransparency = 0
+	textLabel.Parent = billboard
+
+	-- ========================================================
+	-- ANIMACIÓN: CURVA EN U INVERTIDA (ARCO PARABÓLICO) Y FADE
+	-- ========================================================
+	task.spawn(function()
+		local duration = 0.75 -- Cuánto dura el número flotando
+		local elapsed = 0
+
+		-- Dirección aleatoria hacia los lados para que los números no se encimen si disparas rápido
+		local driftX = math.random(-3, 3)
+		local driftZ = math.random(-3, 3)
+
+		while elapsed < duration do
+			local dt = task.wait()
+			elapsed += dt
+			local progress = elapsed / duration
+
+			-- 1. Movimiento en U invertida usando la función Seno (Sube y luego baja un poco)
+			local currentY = math.sin(progress * math.pi) * 5
+
+			-- 2. Movimiento horizontal constante
+			local currentX = driftX * progress
+			local currentZ = driftZ * progress
+
+			-- Aplicar el desplazamiento en el espacio del mundo
+			billboard.StudsOffsetWorldSpace = Vector3.new(currentX, currentY, currentZ)
+
+			-- 3. Efecto Fade Out (Comienza a desvanecerse a la mitad del camino)
+			if progress > 0.4 then
+				local fadeProgress = (progress - 0.4) / 0.6
+				textLabel.TextTransparency = fadeProgress
+				textLabel.TextStrokeTransparency = fadeProgress
+			end
+		end
+
+		-- Limpieza absoluta de memoria
+		billboard:Destroy()
+		attachment:Destroy()
+	end)
+end)
+
+print("✅ [DamageIndicator] Inicializado con animación en arco y fadeout.")
+
+OwnerBaseUI *localscript*
+
+--!strict
+-- LocalScript: OwnerBaseUI
+-- Ubicación: StarterPlayerScripts / StarterGui
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+
+-- Esperamos a que le asignen la base
+local baseNumber = player:GetAttribute("BaseNumber")
+while not baseNumber do
+	task.wait(0.5)
+	baseNumber = player:GetAttribute("BaseNumber")
+end
+
+-- Buscamos la base completa (base1, base2, etc.)
+local base = Workspace:FindFirstChild("base" .. baseNumber)
+if not base then
+	warn("[OwnerBaseUI] No se encontró la base" .. baseNumber)
+	return
+end
+
+-- BillboardGui flotante (solo lo ve el dueño)
+local billboard = Instance.new("BillboardGui")
+billboard.Name = "OwnerFloatingUI"
+billboard.Size = UDim2.new(0, 220, 0, 100)
+billboard.StudsOffset = Vector3.new(0, 40, 0) -- Más alto para que se vea encima de toda la base
+billboard.AlwaysOnTop = true
+billboard.Adornee = base
+billboard.Parent = player:WaitForChild("PlayerGui")
+
+-- Foto de perfil (centrada)
+local avatar = Instance.new("ImageLabel")
+avatar.Name = "Avatar"
+avatar.Size = UDim2.new(0, 70, 0, 70)
+avatar.Position = UDim2.new(0.5, -35, 0, 5)
+avatar.BackgroundTransparency = 1
+
+-- 🛡️ BLINDAJE ANTICAÍDAS DE ROBLOX (pcall)
+local success, thumbnailContent = pcall(function()
+	return Players:GetUserThumbnailAsync(
+		player.UserId,
+		Enum.ThumbnailType.HeadShot,
+		Enum.ThumbnailSize.Size150x150
+	)
+end)
+
+-- Si la API de Roblox falla, usamos una imagen transparente o un ID por defecto
+if success and thumbnailContent then
+	avatar.Image = thumbnailContent
+else
+	avatar.Image = "rbxassetid://0" -- Fallback seguro
+	warn("[OwnerBaseUI] Los servicios de avatar de Roblox no responden. Usando marcador de posición.")
+end
+
+avatar.Parent = billboard
+
+-- Nombre del jugador (debajo de la foto)
+local nameLabel = Instance.new("TextLabel")
+nameLabel.Name = "NameLabel"
+nameLabel.Size = UDim2.new(1, 0, 0, 30)
+nameLabel.Position = UDim2.new(0, 0, 0, 78)
+nameLabel.BackgroundTransparency = 1
+nameLabel.Text = player.DisplayName
+nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+nameLabel.TextScaled = true
+nameLabel.Font = Enum.Font.GothamBold
+nameLabel.TextStrokeTransparency = 0.3
+nameLabel.Parent = billboard
+
+ShopClient *localscript*
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local ShopEvents = ReplicatedStorage:WaitForChild("ShopEvents")
+local OpenShop = ShopEvents:WaitForChild("OpenShop")
+local CloseShop = ShopEvents:WaitForChild("CloseShop")
+local BuyItem = ShopEvents:WaitForChild("BuyItem")
+
+local shopGui = player:WaitForChild("PlayerGui"):WaitForChild("ShopGui")
+local mainFrame = shopGui:WaitForChild("MainFrame")
+local scrollingFrame = mainFrame:WaitForChild("ScrollingFrame")
+local closeButton = mainFrame:WaitForChild("CloseButton")
+
+-- ====================== LISTA DE HERRAMIENTAS ======================
+local shopItems = {
+	{
+		name = "Speed Coil",
+		price = 0,
+		description = "Aumenta mucho tu velocidad de movimiento",
+		toolName = "Speed Coil"
+	},
+	{
+		name = "Gravity Coil",
+		price = 0,
+		description = "Reduce tu gravedad y te permite saltar más alto",
+		toolName = "Gravity Coil"
+	},
+}
+
+-- Función para crear una tarjeta de item
+local function createItemCard(itemData)
+	local card = Instance.new("Frame")
+	card.Size = UDim2.new(1, -20, 0, 90)
+	card.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	card.BorderSizePixel = 0
+	card.Parent = scrollingFrame
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Text = itemData.name
+	nameLabel.Size = UDim2.new(0.6, 0, 0.4, 0)
+	nameLabel.Position = UDim2.new(0.05, 0, 0.1, 0)
+	nameLabel.TextColor3 = Color3.new(1,1,1)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextSize = 20
+	nameLabel.Parent = card
+
+	local descLabel = Instance.new("TextLabel")
+	descLabel.Text = itemData.description
+	descLabel.Size = UDim2.new(0.6, 0, 0.4, 0)
+	descLabel.Position = UDim2.new(0.05, 0, 0.5, 0)
+	descLabel.TextColor3 = Color3.fromRGB(200,200,200)
+	descLabel.BackgroundTransparency = 1
+	descLabel.Font = Enum.Font.Gotham
+	descLabel.TextSize = 14
+	descLabel.Parent = card
+
+	local buyButton = Instance.new("TextButton")
+	buyButton.Text = "Comprar"
+	buyButton.Size = UDim2.new(0.25, 0, 0.6, 0)
+	buyButton.Position = UDim2.new(0.7, 0, 0.2, 0)
+	buyButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+	buyButton.TextColor3 = Color3.new(1,1,1)
+	buyButton.Font = Enum.Font.GothamBold
+	buyButton.TextSize = 18
+	buyButton.Parent = card
+
+	buyButton.MouseButton1Click:Connect(function()
+		BuyItem:FireServer(itemData.toolName)
+	end)
+
+	return card
+end
+
+-- Cargar todos los items en la GUI
+for _, item in ipairs(shopItems) do
+	createItemCard(item)
+end
+
+-- ====================== ABRIR / CERRAR GUI ======================
+OpenShop.OnClientEvent:Connect(function()
+	shopGui.Enabled = true
+end)
+
+CloseShop.OnClientEvent:Connect(function()
+	shopGui.Enabled = false
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+	shopGui.Enabled = false
+end)
+
+shopGui.Enabled = false -- Empieza cerrada
+
+print("✅ [ShopClient] Tienda lista")
+
+TurretController *localscript
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local canon = nil
+local initialCFrame = nil
+local lastShot = 0
+local FIRE_RATE = 0.15
+local isHoldingMouse = false
+
+local ShootEvent = ReplicatedStorage:WaitForChild("ShootTurret")
+
+-- ====================== CRUCETA ======================
+local gameUI = player:WaitForChild("PlayerGui"):WaitForChild("GameUI")
+local crosshair = gameUI:WaitForChild("Crosshair")
+
+local function showCrosshair()
+	UserInputService.MouseIconEnabled = false
+	crosshair.Visible = true
+end
+
+local function hideCrosshair()
+	UserInputService.MouseIconEnabled = true
+	crosshair.Visible = false
+end
+
+print("✅ Script de torreta iniciado")
+
+local YAW_OFFSET = math.rad(-90)
+local MAX_PITCH = math.rad(80)
+local MIN_PITCH = math.rad(-15)
+
+-- Función mejorada: encuentra el cañón según en qué base estás sentado
+local function obtenerCanon()
+	local char = player.Character
+	local hum = char and char:FindFirstChild("Humanoid")
+	if not hum or not hum.SeatPart then return nil end
+
+	local seat = hum.SeatPart
+
+	local current = seat
+	while current do
+		if current.Name:match("^base%d+$") then
+			local torreta = current:FindFirstChild("torreta")
+			if torreta then
+				return torreta:FindFirstChild("cañon")
+			end
+		end
+		current = current.Parent
+	end
+	return nil
+end
+
+local function puedeUsarTurreta()
+	local char = player.Character
+	local hum = char and char:FindFirstChild("Humanoid")
+	if not hum or not hum.SeatPart then return false end
+
+	local seat = hum.SeatPart
+	local current = seat
+
+	while current do
+		if current.Name:match("^base%d+$") then
+			local baseNum = tonumber(current.Name:match("%d+"))
+			local playerBase = player:GetAttribute("BaseNumber")
+			return baseNum == playerBase
+		end
+		current = current.Parent
+	end
+	return false
+end
+
+local function estaSentado()
+	local char = player.Character
+	local hum = char and char:FindFirstChild("Humanoid")
+	return hum and hum.SeatPart and hum.SeatPart.Name == "asiento"
+end
+
+-- ==================== DETECTAR CLICK Y HOLD ====================
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		isHoldingMouse = true
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		isHoldingMouse = false
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	local sentado = estaSentado()
+	local esDueno = puedeUsarTurreta()
+	local isCarrying = player:GetAttribute("IsCarryingSpirit") or false
+
+	-- ====================== CONTROL DE CRUCETA ======================
+	if sentado and esDueno and not isCarrying then
+		showCrosshair()
+	else
+		hideCrosshair()
+	end
+
+	if sentado then
+		if not esDueno or isCarrying then
+			local hum = player.Character and player.Character:FindFirstChild("Humanoid")
+			if hum then
+				hum.Sit = false
+			end
+			return
+		end
+
+		if not canon then
+			canon = obtenerCanon()
+			if canon then
+				initialCFrame = canon.CFrame
+				player.CameraMode = Enum.CameraMode.LockFirstPerson
+			end
+		end
+	end
+
+	if canon then
+		if sentado and esDueno and not isCarrying then
+			-- ==================== APUNTADO ====================
+			local lookDirection = camera.CFrame.LookVector
+			local pitch = math.asin(math.clamp(lookDirection.Y, -1, 1))
+			pitch = math.clamp(pitch, MIN_PITCH, MAX_PITCH)
+
+			local flatDir = Vector3.new(lookDirection.X, 0, lookDirection.Z).Unit
+			local finalDir = flatDir * math.cos(pitch) + Vector3.new(0, math.sin(pitch), 0)
+
+			local targetCFrame = CFrame.lookAt(canon.Position, canon.Position + finalDir)
+				* CFrame.Angles(0, YAW_OFFSET, 0)
+
+			canon.CFrame = canon.CFrame:Lerp(targetCFrame, 0.3)
+
+			-- ==================== DISPARO CONTINUO ====================
+			if isHoldingMouse and tick() - lastShot >= FIRE_RATE then
+				lastShot = tick()
+				local shootDirection = finalDir
+				local firePos = canon.Position + shootDirection * (canon.Size.Z / 2 + 2)
+				ShootEvent:FireServer(firePos, shootDirection)
+			end
+
+		else
+			if initialCFrame then
+				canon.CFrame = canon.CFrame:Lerp(initialCFrame, 0.2)
+				if (canon.CFrame.LookVector - initialCFrame.LookVector).Magnitude < 0.04 then
+					canon.CFrame = initialCFrame
+					canon = nil
+					initialCFrame = nil
+					player.CameraMode = Enum.CameraMode.Classic
+				end
+			end
+		end
+	end
+end)
+
+TurretUpgradeClient *localscript*
+
+--!strict
+-- LocalScript: TurretUpgradeClient
+-- Ubicación: StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local playerGui = player.PlayerGui
+local manuallyClosed = false
+
+local UpgradeEvents = ReplicatedStorage:WaitForChild("UpgradeEvents")
+local RequestUpgrade = UpgradeEvents:WaitForChild("RequestUpgrade")
+local UpdateUpgradeUI = UpgradeEvents:WaitForChild("UpdateUpgradeUI")
+
+-- Colores por nivel
+local function getLevelColor(level)
+	if level == 0 then return Color3.fromRGB(180, 180, 180)
+	elseif level < 4 then return Color3.fromRGB(100, 200, 100)
+	elseif level < 7 then return Color3.fromRGB(100, 150, 255)
+	elseif level < 10 then return Color3.fromRGB(200, 100, 255)
+	else return Color3.fromRGB(255, 200, 0) end -- máximo = dorado
+end
+
+-- Crear UI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "TurretUpgradeGui"
+screenGui.ResetOnSpawn = false
+screenGui.Enabled = false
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0.7, 0, 0.7, 0)
+mainFrame.Position = UDim2.new(0.15, 0, 0.15, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = mainFrame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 50)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+title.BorderSizePixel = 0
+title.Text = "⚡ Mejoras de Torreta"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = title
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 36, 0, 36)
+closeBtn.Position = UDim2.new(1, -42, 0, 7)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextScaled = true
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = mainFrame
+
+local closeBtnCorner = Instance.new("UICorner")
+closeBtnCorner.CornerRadius = UDim.new(0, 8)
+closeBtnCorner.Parent = closeBtn
+
+closeBtn.MouseButton1Click:Connect(function()
+	screenGui.Enabled = false
+	manuallyClosed = true
+end)
+
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -20, 1, -60)
+scrollFrame.Position = UDim2.new(0, 10, 0, 55)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.ScrollBarThickness = 4
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scrollFrame.Parent = mainFrame
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 8)
+listLayout.Parent = scrollFrame
+
+local upgradeButtons = {}
+
+-- Actualizar UI con datos del servidor
+UpdateUpgradeUI.OnClientEvent:Connect(function(upgradeData)
+	for _, btn in pairs(upgradeButtons) do
+		btn:Destroy()
+	end
+	upgradeButtons = {}
+
+	for _, data in ipairs(upgradeData) do
+		local card = Instance.new("Frame")
+		card.Size = UDim2.new(1, -8, 0, 60)
+		card.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+		card.BorderSizePixel = 0
+		card.Parent = scrollFrame
+
+		local cardCorner = Instance.new("UICorner")
+		cardCorner.CornerRadius = UDim.new(0, 8)
+		cardCorner.Parent = card
+
+		local nameLabel = Instance.new("TextLabel")
+		nameLabel.Size = UDim2.new(0.5, 0, 1, 0)
+		nameLabel.Position = UDim2.new(0, 10, 0, 0)
+		nameLabel.BackgroundTransparency = 1
+		nameLabel.Text = data.DisplayName
+		nameLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+		nameLabel.TextScaled = true
+		nameLabel.Font = Enum.Font.Gotham
+		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+		nameLabel.Parent = card
+
+		local levelLabel = Instance.new("TextLabel")
+		levelLabel.Size = UDim2.new(0.15, 0, 1, 0)
+		levelLabel.Position = UDim2.new(0.5, 0, 0, 0)
+		levelLabel.BackgroundTransparency = 1
+		levelLabel.Text = "Nv." .. data.Level
+		levelLabel.TextColor3 = getLevelColor(data.Level)
+		levelLabel.TextScaled = true
+		levelLabel.Font = Enum.Font.GothamBold
+		levelLabel.Parent = card
+
+		local buyBtn = Instance.new("TextButton")
+		buyBtn.Size = UDim2.new(0.3, 0, 0.65, 0)
+		buyBtn.Position = UDim2.new(0.68, 0, 0.175, 0)
+		buyBtn.BorderSizePixel = 0
+		buyBtn.TextScaled = true
+		buyBtn.Font = Enum.Font.GothamBold
+		buyBtn.Parent = card
+
+		local buyCorner = Instance.new("UICorner")
+		buyCorner.CornerRadius = UDim.new(0, 6)
+		buyCorner.Parent = buyBtn
+
+		if data.Level >= 10 then
+			buyBtn.Text = "MAX"
+			buyBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+			buyBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+			buyBtn.Active = false
+		else
+			buyBtn.Text = "⚡ " .. data.Cost
+			buyBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 220)
+			buyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			buyBtn.MouseButton1Click:Connect(function()
+				RequestUpgrade:FireServer(data.StatName)
+			end)
+		end
+
+		table.insert(upgradeButtons, card)
+	end
+end)
+
+-- ====================================================================
+-- ⚡ SISTEMA OPTIMIZADO POR PROXIMITYPROMPT (SIN ERRORES DE SINTAXIS)
+-- ====================================================================
+local function setupProximityDetection()
+	local baseNumber = player:GetAttribute("BaseNumber")
+	if not baseNumber then 
+		warn("[TurretUpgradeClient] El jugador no tiene el atributo BaseNumber asignado.")
+		return 
+	end
+
+	-- 1. Esperamos de forma segura al modelo de la base en el Workspace
+	local baseFolder = Workspace:WaitForChild("base" .. baseNumber, 15)
+	if not baseFolder then 
+		warn("[TurretUpgradeClient] No se encontró en el Workspace: base" .. baseNumber)
+		return 
+	end
+
+	-- 2. Esperamos de forma segura al modelo/carpeta 'Upgrades'
+	local upgradesFolder = baseFolder:WaitForChild("Upgrades", 10)
+	if not upgradesFolder then
+		warn("[TurretUpgradeClient] Falta el objeto 'Upgrades' dentro de base" .. baseNumber)
+		return
+	end
+
+	-- 3. Buscamos 'TurretUpgrades' (en plural, tal como lo tienes en tu juego)
+	local upgradeWall = upgradesFolder:WaitForChild("TurretUpgrades", 10)
+	if not upgradeWall or not upgradeWall:IsA("BasePart") then 
+		warn("[TurretUpgradeClient] Falta la parte 'TurretUpgrades' (en plural) dentro de Upgrades.")
+		return 
+	end
+
+	-- 4. Limpiamos prompts antiguos para evitar duplicados
+	local existingPrompt = upgradeWall:FindFirstChildOfClass("ProximityPrompt")
+	if existingPrompt then existingPrompt:Destroy() end
+
+	-- 5. Creamos el detector nativo corregido
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.MaxActivationDistance = 10               -- Rango de 10 studs
+	prompt.Style = Enum.ProximityPromptStyle.Custom   -- Mantiene tu UI personalizada e invisible la de Roblox
+	prompt.ActionText = "Mejorar"
+	prompt.ObjectText = "Torreta"
+	prompt.Parent = upgradeWall
+
+	-- Evento: Al entrar al rango
+	prompt.PromptShown:Connect(function()
+		if not manuallyClosed then
+			screenGui.Enabled = true
+		end
+	end)
+
+	-- Evento: Al salir del rango
+	prompt.PromptHidden:Connect(function()
+		screenGui.Enabled = false
+		manuallyClosed = false 
+	end)
+
+	print("✅ [TurretUpgradeClient] ¡Detector activado con éxito en TurretUpgrades de base" .. baseNumber .. "!")
+end
+
+-- Inicializar la detección al cargar la base
+if player:GetAttribute("BaseNumber") then
+	setupProximityDetection()
+else
+	player:GetAttributeChangedSignal("BaseNumber"):Connect(function()
+		if player:GetAttribute("BaseNumber") then
+			setupProximityDetection()
+		end
+	end)
+end
+
+La jerarquia de workspace supongo que todos la saben, en Workspace dentro de base1, 8 dentro de based, dentro de pulsador, dentro de pulsador otra vez hay un script
+
+--!strict
+-- Script dentro del objeto "pulsador" (botón del dueño)
+
+local ServerScriptService = game:GetService("ServerScriptService")
+local FriendAccessSystem = require(ServerScriptService:WaitForChild("FriendAccessSystem"))
+
+local button = script.Parent
+
+-- Obtener el número de base de forma más segura
+local current = button.Parent
+local baseNumber = nil
+
+while current do
+	if current:IsA("Model") and current.Name:match("^base%d+$") then
+		baseNumber = tonumber(current.Name:match("%d+"))
+		break
+	end
+
+	current = current.Parent
+end
+
+-- Crear ProximityPrompt si no existe
+local prompt = button:FindFirstChildOfClass("ProximityPrompt")
+if not prompt then
+	prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Permitir Amigos"
+	prompt.ObjectText = "Acceso"
+	prompt.HoldDuration = 0.3
+	prompt.MaxActivationDistance = 10
+	prompt.Parent = button
+end
+
+-- Función para actualizar color del botón
+local function updateButtonColor()
+	if FriendAccessSystem.GetAllowFriends(baseNumber) then
+		button.Color = Color3.fromRGB(0, 200, 0)   -- Verde
+	else
+		button.Color = Color3.fromRGB(200, 50, 50) -- Rojo
+	end
+end
+
+-- Inicializar color
+updateButtonColor()
+
+-- Cuando el dueño usa el botón
+prompt.Triggered:Connect(function(player)
+	-- Solo el dueño puede usarlo
+	if player:GetAttribute("BaseNumber") ~= baseNumber then
+		return
+	end
+
+	-- Cambiar estado
+	local newState = FriendAccessSystem.ToggleAllowFriends(baseNumber)
+
+	-- Actualizar color
+	updateButtonColor()
+
+	print(player.Name .. " cambió AllowFriends de la base " .. baseNumber .. " →", newState)
+end)
+
+y ya es todo, si llegaron hasta aca digan patata en el chat
