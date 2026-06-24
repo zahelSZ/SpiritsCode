@@ -3027,8 +3027,6 @@ Players.PlayerAdded:Connect(function(player)
 	end)
 end)
 
-25./DataManager
-
 --!strict
 -- ModuleScript: DataManager
 -- Ubicación: ServerScriptService
@@ -3041,47 +3039,42 @@ local PlayerDataStore = DataStoreService:GetDataStore(GAME_DATA_STORE_NAME)
 
 local DataManager = {}
 local sessionData = {}
-local AUTOSAVE_INTERVAL = 300 -- 5 minutos
+local AUTOSAVE_INTERVAL = 300 -- 5 minutos (¡Vital para no perder progreso!)
 
--- Datos por defecto (estructura base del jugador)
--- Busca esta sección y agrega lo nuevo
+-- ========================================================
+-- DATOS POR DEFECTO (ENFOQUE DE EQUIPOS)
+-- ========================================================
 local DEFAULT_DATA = {
 	Version = 1,
-	Esencia = 0,
-	AutoBuyTools = false,
 	LastLogin = 0,
 	HeldSpirit = nil,
 
-	-- 🆕 CAMPOS PARA REBIRTHS
-	Rebirths = 0,                  -- Cantidad total de renacimientos
-	MultiplicadorEsencia = 1,      -- ×1, ×2, ×3... según lo pediste
-	EspaciosMaxBase = 1,           -- Espacios disponibles en la base
-	BonoCriticoPorcentual = 0,     -- % extra de probabilidad de crítico
+	-- Rebirths y Progresión básica
+	Rebirths = 0,
+	EspaciosMaxBase = 1,
+	BonoCriticoPorcentual = 0,
 
 	Turret = {
 		Stats = {
-			Damage = 10,
-			ProjectileSpeed = 450,
-			ProjectileSize = 4,
-			FireRate = 0.15,
-			Range = 200,
-			CritChance = 0,
-			MultiShot = 1,
+			Damage = 10, ProjectileSpeed = 450, ProjectileSize = 4,
+			FireRate = 0.15, Range = 200, CritChance = 0, MultiShot = 1,
 		},
 		Levels = {
-			Damage = 0,
-			ProjectileSpeed = 0,
-			ProjectileSize = 0,
-			FireRate = 0,
-			Range = 0,
-			CritChance = 0,
-			MultiShot = 0,
+			Damage = 0, ProjectileSpeed = 0, ProjectileSize = 0,
+			FireRate = 0, Range = 0, CritChance = 0, MultiShot = 0,
 		}
 	},
-	Spirits = {}
+
+	-- Almacenamiento de los Spirits
+	Spirits = {},
+
+	-- EQUIPOS DEL JUGADOR
+	Equipos = {}
 }
 
--- Reconciliación de datos (para futuras actualizaciones)
+-- ========================================================
+-- FUNCIONES INTERNAS (RECONCILIACIÓN Y COPIA)
+-- ========================================================
 local function reconcile(target, template)
 	for key, value in pairs(template) do
 		if target[key] == nil then
@@ -3097,188 +3090,168 @@ local function reconcile(target, template)
 	end
 end
 
--- Copia profunda
 local function deepCopy(tbl)
 	local copy = {}
 	for k, v in pairs(tbl) do
-		if type(v) == "table" then
-			copy[k] = deepCopy(v)
-		else
-			copy[k] = v
-		end
+		copy[k] = type(v) == "table" and deepCopy(v) or v
 	end
 	return copy
 end
 
--- Cargar datos del jugador
+-- ========================================================
+-- CARGAR / GUARDAR / AUTOSAVE
+-- ========================================================
 function DataManager.LoadData(player: Player)
 	local key = "Player_" .. tostring(player.UserId)
 	local data = nil
 
-	local success, result = pcall(function()  
-		return PlayerDataStore:GetAsync(key)  
-	end)  
+	local success, result = pcall(function()
+		return PlayerDataStore:GetAsync(key)
+	end)
 
-	if success then  
-		data = result  
+	if success then
+		data = result
+		if data then
+			reconcile(data, DEFAULT_DATA)
+			data.LastLogin = os.time()
+			print("💾 [DataManager] Datos cargados para:", player.Name)
+		else
+			data = deepCopy(DEFAULT_DATA)
+			data.LastLogin = os.time()
+			print("🆕 [DataManager] Nuevo jugador:", player.Name)
+		end
+	else
+		warn("❌ [DataManager] Error al cargar datos de", player.Name)
+		data = deepCopy(DEFAULT_DATA)
+		player:SetAttribute("DataLoadFailed", true)
+	end
 
-		if data then  
-			reconcile(data, DEFAULT_DATA)  
-			data.LastLogin = os.time()  
-			print("💾 [DataManager] Datos cargados para:", player.Name)  
-		else  
-			data = deepCopy(DEFAULT_DATA)  
-			data.LastLogin = os.time()  
-			print("🆕 [DataManager] Nuevo jugador:", player.Name)  
-		end  
-	else  
-		warn("❌ [DataManager] Error al cargar datos de", player.Name, "→", tostring(result))  
-		data = deepCopy(DEFAULT_DATA)  
-		player:SetAttribute("DataLoadFailed", true)  
-	end  
-
-	sessionData[player] = data  
+	sessionData[player] = data
 	return data
 end
 
--- Guardar datos del jugador
 function DataManager.SaveData(player: Player)
 	local data = sessionData[player]
 	if not data or player:GetAttribute("DataLoadFailed") then return end
 
-	local success, err = pcall(function()  
-		PlayerDataStore:SetAsync("Player_" .. tostring(player.UserId), data)  
-	end)  
+	local success, err = pcall(function()
+		PlayerDataStore:SetAsync("Player_" .. tostring(player.UserId), data)
+	end)
 
-	if success then  
-		print("✅ [DataManager] Datos guardados para:", player.Name)  
-	else  
-		warn("❌ [DataManager] Error al guardar datos de", player.Name, "→", tostring(err))  
+	if success then
+		print("✅ [DataManager] Datos guardados para:", player.Name)
+	else
+		warn("❌ [DataManager] Error al guardar:", err)
 	end
 end
 
--- Autosave cada 5 minutos
+-- 🔄 BUCLE DE AUTOSAVE AUTOMÁTICO
 task.spawn(function()
 	while true do
 		task.wait(AUTOSAVE_INTERVAL)
-
-		for player, _ in pairs(sessionData) do  
-			if player and player.Parent then  
-				local ok, err = pcall(function()  
-					DataManager.SaveData(player)  
-				end)  
-
-				if not ok then  
-					warn("⚠️ [DataManager] Error en autosave de", player.Name, "→", tostring(err))  
-				end  
-			end  
-		end  
+		for player, _ in pairs(sessionData) do
+			if player and player.Parent then
+				local ok, err = pcall(function()
+					DataManager.SaveData(player)
+				end)
+				if not ok then
+					warn("⚠️ [DataManager] Error en autosave de", player.Name, "→", tostring(err))
+				end
+			end
+		end
 	end
 end)
 
--- Obtener datos del jugador (caché)
 function DataManager.GetData(player: Player)
 	return sessionData[player]
 end
 
--- Actualizar datos del jugador
-function DataManager.UpdateData(player: Player, callback: (any) -> any)
+function DataManager.UpdateData(player: Player, callback)
 	if sessionData[player] then
 		sessionData[player] = callback(sessionData[player])
 	end
 end
 
--- Descargar jugador (guardar y limpiar)
 function DataManager.UnloadPlayer(player: Player)
 	DataManager.SaveData(player)
 	sessionData[player] = nil
 end
 
 -- ========================================================
--- FUNCIONES CORREGIDAS: Almacenamiento Seguro de Spirits
+-- GESTIÓN DE SPIRITS
 -- ========================================================
-
--- Guardar un Spirit en un slot específico (Claves forzadas a String)
-function DataManager.SaveSpiritToSlot(player: Player, baseNumber: number, slotNumber: number, spiritName: string, accumulatedEssence: number)
+function DataManager.SaveSpiritToSlot(player, baseNumber, slotNumber, spiritName, stats)
 	local data = sessionData[player]
 	if not data then return false end
+	if not data.Spirits then data.Spirits = {} end
 
-	if not data.Spirits then data.Spirits = {} end  
-
-	local baseKey = tostring(baseNumber)  
-	local slotKey = tostring(slotNumber)  
-
-	if not data.Spirits[baseKey] then  
-		data.Spirits[baseKey] = {}  
-	end  
-
-	data.Spirits[baseKey][slotKey] = {  
-		SpiritName = spiritName,  
-		AccumulatedEssence = accumulatedEssence or 0,  
-	}  
-
-	return true
-end
-
--- Quitar un Spirit de un slot
-function DataManager.RemoveSpiritFromSlot(player: Player, baseNumber: number, slotNumber: number)
-	local data = sessionData[player]
 	local baseKey = tostring(baseNumber)
 	local slotKey = tostring(slotNumber)
 
-	if not data or not data.Spirits or not data.Spirits[baseKey] then  
-		return false  
-	end  
-
-	data.Spirits[baseKey][slotKey] = nil  
-	return true
-end
-
--- Obtener todos los Spirits de un jugador
-function DataManager.GetPlayerSpirits(player: Player)
-	local data = sessionData[player]
-	if not data or not data.Spirits then
-		return {}
+	if not data.Spirits[baseKey] then
+		data.Spirits[baseKey] = {}
 	end
-	return data.Spirits
-end
 
--- Obtener los Spirits de una base específica
-function DataManager.GetBaseSpirits(player: Player, baseNumber: number)
-	local data = sessionData[player]
-	local baseKey = tostring(baseNumber)
-
-	if not data or not data.Spirits or not data.Spirits[baseKey] then  
-		return {}  
-	end  
-	return data.Spirits[baseKey]
-end
--- Guardar Spirit en mano (estado intermedio)
-function DataManager.SetHeldSpirit(player: Player, spiritName: string, previousBase: number, previousSlot: number)
-	local data = sessionData[player]
-	if not data then return false end
-
-	data.HeldSpirit = {
+	data.Spirits[baseKey][slotKey] = {
 		SpiritName = spiritName,
-		PreviousBase = tostring(previousBase),
-		PreviousSlot = tostring(previousSlot),
+		Stats = stats or {},
+		Habilidad = stats and stats.Habilidad or "",
+		Rol = "Sin rol",
 	}
 	return true
 end
 
--- Limpiar Spirit en mano
-function DataManager.ClearHeldSpirit(player: Player)
+function DataManager.RemoveSpiritFromSlot(player, baseNumber, slotNumber)
 	local data = sessionData[player]
-	if not data then return false end
-	data.HeldSpirit = nil
+	local baseKey = tostring(baseNumber)
+	local slotKey = tostring(slotNumber)
+
+	if not data or not data.Spirits or not data.Spirits[baseKey] then
+		return false
+	end
+
+	data.Spirits[baseKey][slotKey] = nil
 	return true
 end
 
--- Obtener Spirit en mano
-function DataManager.GetHeldSpirit(player: Player)
+function DataManager.GetBaseSpirits(player, baseNumber)
 	local data = sessionData[player]
-	if not data then return nil end
-	return data.HeldSpirit
+	local baseKey = tostring(baseNumber)
+	if not data or not data.Spirits or not data.Spirits[baseKey] then
+		return {}
+	end
+	return data.Spirits[baseKey]
+end
+
+-- ========================================================
+-- GESTIÓN DE EQUIPOS
+-- ========================================================
+function DataManager.GetEquipos(player)
+	local data = sessionData[player]
+	if not data then return {} end
+	return data.Equipos or {}
+	}
+
+	function DataManager.SaveEquipo(player, equipoNombre, equipoData)
+	local data = sessionData[player]
+	if not data then return false end
+
+	if not data.Equipos then data.Equipos = {} end
+	data.Equipos[equipoNombre] = equipoData
+	return true
+end
+
+function DataManager.GetEquipo(player, equipoNombre)
+	local data = sessionData[player]
+	if not data or not data.Equipos then return nil end
+	return data.Equipos[equipoNombre]
+end
+
+function DataManager.DeleteEquipo(player, equipoNombre)
+	local data = sessionData[player]
+	if not data or not data.Equipos then return false end
+	data.Equipos[equipoNombre] = nil
+	return true
 end
 
 return DataManager
