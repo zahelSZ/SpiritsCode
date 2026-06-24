@@ -2327,48 +2327,68 @@ local SpiritPositionManager = require(ServerScriptService:WaitForChild("SpiritPo
 local SpiritUtils = require(ServerScriptService:WaitForChild("SpiritUtils"))
 local SpiritTemplate = ReplicatedStorage:WaitForChild("SpiritTemplate")
 
+-- ========================================================
+-- SPIRIT DATABASE (COMPLETA Y ADAPTADA A NUEVAS STATS)
+-- ========================================================
 local SpiritDatabase = {
-	{Name = "Espiritu de Tierra",          Rarity = "Comun",      EssenceRate = 1,       SpiriumValue = 5},
-	{Name = "Espiritu de Brisa",           Rarity = "Comun",      EssenceRate = 2,       SpiriumValue = 8},
-	{Name = "Espiritu de Gota",            Rarity = "Comun",      EssenceRate = 3,       SpiriumValue = 10},
-	{Name = "Espiritu de Musgo",           Rarity = "Comun",      EssenceRate = 4,       SpiriumValue = 12},
-	{Name = "Espiritu de Chispa",          Rarity = "Comun",      EssenceRate = 5,       SpiriumValue = 15},
-	{Name = "Espiritu de Arena",           Rarity = "Poco Comun", EssenceRate = 8,       SpiriumValue = 30},
-	{Name = "Espiritu de Hielo",           Rarity = "Poco Comun", EssenceRate = 11,      SpiriumValue = 45},
-	{Name = "Espiritu de Fuego",           Rarity = "Poco Comun", EssenceRate = 14,      SpiriumValue = 60},
-	{Name = "Espiritu de Cristal",         Rarity = "Poco Comun", EssenceRate = 17,      SpiriumValue = 75},
-	{Name = "Espiritu de Trueno",          Rarity = "Poco Comun", EssenceRate = 20,      SpiriumValue = 90},
-	{Name = "Espiritu del Bosque",         Rarity = "Raro",       EssenceRate = 30,      SpiriumValue = 150},
-	{Name = "Espiritu Marino",             Rarity = "Raro",       EssenceRate = 38,      SpiriumValue = 180},
-	{Name = "Espiritu de Luna",            Rarity = "Raro",       EssenceRate = 47,      SpiriumValue = 220},
-	{Name = "Espiritu de Sombra",          Rarity = "Raro",       EssenceRate = 56,      SpiriumValue = 260},
-	{Name = "Espiritu del Viento Supremo", Rarity = "Raro",       EssenceRate = 65,      SpiriumValue = 300},
-	{Name = "Espiritu Fantasma",           Rarity = "Epico",      EssenceRate = 90,      SpiriumValue = 450},
-	{Name = "Espiritu Arcano",             Rarity = "Epico",      EssenceRate = 110,     SpiriumValue = 550},
-	{Name = "Espiritu de Magma",           Rarity = "Epico",      EssenceRate = 135,     SpiriumValue = 680},
-	{Name = "Espiritu de Tormenta",        Rarity = "Epico",      EssenceRate = 160,     SpiriumValue = 800},
-	{Name = "Espiritu del Vacio",          Rarity = "Epico",      EssenceRate = 180,     SpiriumValue = 900},
-	{Name = "Espiritu de la Vida",         Rarity = "Legendario", EssenceRate = 250,     SpiriumValue = 1200},
-	{Name = "Espiritu de la Estrella",     Rarity = "Legendario", EssenceRate = 320,     SpiriumValue = 1500},
-	{Name = "Espiritu del Sol",            Rarity = "Legendario", EssenceRate = 400,     SpiriumValue = 1800},
-	{Name = "Espiritu del Tiempo",         Rarity = "Legendario", EssenceRate = 470,     SpiriumValue = 2100},
-	{Name = "Espiritu del Dragon",         Rarity = "Legendario", EssenceRate = 550,     SpiriumValue = 2500},
-	{Name = "Espiritu del Caos",           Rarity = "Mitico",     EssenceRate = 800,     SpiriumValue = 3500},
-	{Name = "Espiritu del Juicio",         Rarity = "Mitico",     EssenceRate = 1000,    SpiriumValue = 4200},
-	{Name = "Espiritu de la Muerte",       Rarity = "Mitico",     EssenceRate = 1300,    SpiriumValue = 5000},
-	{Name = "Espiritu de la Dimension",    Rarity = "Mitico",     EssenceRate = 1650,    SpiriumValue = 5800},
-	{Name = "Espiritu del Infinito",       Rarity = "Mitico",     EssenceRate = 2000,    SpiriumValue = 6500},
-	{Name = "Espiritu Demonio",            Rarity = "Demon",      EssenceRate = 3000,    SpiriumValue = 8000},
-	{Name = "Espiritu de la Perdicion",    Rarity = "Demon",      EssenceRate = 4000,    SpiriumValue = 9500},
-	{Name = "Espiritu de la Pesadilla",    Rarity = "Demon",      EssenceRate = 5200,    SpiriumValue = 11000},
-	{Name = "Espiritu Infernal",           Rarity = "Demon",      EssenceRate = 6500,    SpiriumValue = 12500},
-	{Name = "Espiritu del Abismo",         Rarity = "Demon",      EssenceRate = 8000,    SpiriumValue = 14000},
-	{Name = "Espiritu Angel",              Rarity = "Divino",     EssenceRate = 15000,   SpiriumValue = 20000},
-	{Name = "Espiritu Celestial",          Rarity = "Divino",     EssenceRate = 25000,   SpiriumValue = 28000},
-	{Name = "Espiritu del Destino",        Rarity = "Divino",     EssenceRate = 40000,   SpiriumValue = 35000},
-	{Name = "Espiritu de la Creacion",     Rarity = "Divino",     EssenceRate = 65000,   SpiriumValue = 42000},
-	{Name = "Espiritu del Universo",       Rarity = "Divino",     EssenceRate = 100000,  SpiriumValue = 50000},
-	{Name = "Espiritu Santo",              Rarity = "Especial",   EssenceRate = 2000000, SpiriumValue = 100000},
+	-- COMUNES
+	{Name = "Espiritu de Tierra",          Rarity = "Comun",      Stats = {Ataque = 2, Vida = 10, Inventario = 5, Recoleccion = 4}, Habilidad = "+20% defensa cerca de la base"},
+	{Name = "Espiritu de Brisa",           Rarity = "Comun",      Stats = {Ataque = 3, Vida = 4,  Inventario = 6, Recoleccion = 7}, Habilidad = "+10% velocidad al jugador"},
+	{Name = "Espiritu de Gota",            Rarity = "Comun",      Stats = {Ataque = 2, Vida = 6,  Inventario = 5, Recoleccion = 6}, Habilidad = "Curación lenta"},
+	{Name = "Espiritu de Musgo",           Rarity = "Comun",      Stats = {Ataque = 1, Vida = 7,  Inventario = 10, Recoleccion = 10}, Habilidad = "Recolecta plantas más rápido"},
+	{Name = "Espiritu de Chispa",          Rarity = "Comun",      Stats = {Ataque = 6, Vida = 3,  Inventario = 3, Recoleccion = 2}, Habilidad = "Golpe eléctrico ocasional"},
+	
+	-- POCO COMUNES
+	{Name = "Espiritu de Arena",           Rarity = "Poco Comun", Stats = {Ataque = 5, Vida = 15, Inventario = 12, Recoleccion = 12}, Habilidad = "Crea tormentas de arena de soporte"},
+	{Name = "Espiritu de Hielo",           Rarity = "Poco Comun", Stats = {Ataque = 7, Vida = 12, Inventario = 10, Recoleccion = 11}, Habilidad = "Congela enemigos cercanos"},
+	{Name = "Espiritu de Fuego",           Rarity = "Poco Comun", Stats = {Ataque = 10, Vida = 10, Inventario = 8, Recoleccion = 9}, Habilidad = "Quema objetivos en área"},
+	{Name = "Espiritu de Cristal",         Rarity = "Poco Comun", Stats = {Ataque = 6, Vida = 20, Inventario = 15, Recoleccion = 8}, Habilidad = "Refleja daño recibido"},
+	{Name = "Espiritu de Trueno",          Rarity = "Poco Comun", Stats = {Ataque = 12, Vida = 8,  Inventario = 8, Recoleccion = 10}, Habilidad = "Encadena rayos entre rivales"},
+	
+	-- RAROS
+	{Name = "Espiritu del Bosque",         Rarity = "Raro",       Stats = {Ataque = 12, Vida = 30, Inventario = 25, Recoleccion = 25}, Habilidad = "Duplica madera recolectada"},
+	{Name = "Espiritu Marino",             Rarity = "Raro",       Stats = {Ataque = 14, Vida = 28, Inventario = 22, Recoleccion = 24}, Habilidad = "Ataques de agua a distancia"},
+	{Name = "Espiritu de Luna",            Rarity = "Raro",       Stats = {Ataque = 16, Vida = 25, Inventario = 20, Recoleccion = 22}, Habilidad = "Brilla en la oscuridad y potencia stats de noche"},
+	{Name = "Espiritu de Sombra",          Rarity = "Raro",       Stats = {Ataque = 20, Vida = 20, Inventario = 18, Recoleccion = 20}, Habilidad = "Se vuelve invisible al recibir daño crítico"},
+	{Name = "Espiritu del Viento Supremo", Rarity = "Raro",       Stats = {Ataque = 15, Vida = 24, Inventario = 24, Recoleccion = 28}, Habilidad = "Empuja enemigos lejos del jugador"},
+	
+	-- ÉPICOS
+	{Name = "Espiritu Fantasma",           Rarity = "Epico",      Stats = {Ataque = 25, Vida = 40, Inventario = 35, Recoleccion = 35}, Habilidad = "Atraviesa defensas enemigas"},
+	{Name = "Espiritu Arcano",             Rarity = "Epico",      Stats = {Ataque = 30, Vida = 35, Inventario = 30, Recoleccion = 32}, Habilidad = "Potencia las habilidades de otros espíritus"},
+	{Name = "Espiritu de Magma",           Rarity = "Epico",      Stats = {Ataque = 35, Vida = 45, Inventario = 28, Recoleccion = 30}, Habilidad = "Inmune al fuego y charcos de lava"},
+	{Name = "Espiritu de Tormenta",        Rarity = "Epico",      Stats = {Ataque = 32, Vida = 38, Inventario = 32, Recoleccion = 38}, Habilidad = "Genera tornados de recolección masiva"},
+	{Name = "Espiritu del Vacio",          Rarity = "Epico",      Stats = {Ataque = 40, Vida = 30, Inventario = 40, Recoleccion = 30}, Habilidad = "Teletransporta recursos directamente al inventario"},
+	
+	-- LEGENDARIOS
+	{Name = "Espiritu de la Vida",         Rarity = "Legendario", Stats = {Ataque = 45, Vida = 100, Inventario = 60, Recoleccion = 55}, Habilidad = "Revive al jugador una vez por incursión"},
+	{Name = "Espiritu de la Estrella",     Rarity = "Legendario", Stats = {Ataque = 55, Vida = 80,  Inventario = 55, Recoleccion = 65}, Habilidad = "Lluvia de meteoros de corto alcance"},
+	{Name = "Espiritu del Sol",            Rarity = "Legendario", Stats = {Ataque = 70, Vida = 75,  Inventario = 50, Recoleccion = 50}, Habilidad = "Ciega y desorienta a los monstruos"},
+	{Name = "Espiritu del Tiempo",         Rarity = "Legendario", Stats = {Ataque = 50, Vida = 90,  Inventario = 58, Recoleccion = 58}, Habilidad = "Ralentiza el tiempo de los enemigos cercanos"},
+	{Name = "Espiritu del Dragon",         Rarity = "Legendario", Stats = {Ataque = 85, Vida = 85,  Inventario = 45, Recoleccion = 45}, Habilidad = "Lanzallamas continuo de alto daño"},
+	
+	-- MÍTICOS
+	{Name = "Espiritu del Caos",           Rarity = "Mitico",     Stats = {Ataque = 110, Vida = 150, Inventario = 100, Recoleccion = 90}, Habilidad = "Efectos aleatorios devastadores por golpe"},
+	{Name = "Espiritu del Juicio",         Rarity = "Mitico",     Stats = {Ataque = 130, Vida = 130, Inventario = 90,  Recoleccion = 100}, Habilidad = "Aniquila instantáneamente enemigos débiles"},
+	{Name = "Espiritu de la Muerte",       Rarity = "Mitico",     Stats = {Ataque = 160, Vida = 110, Inventario = 80,  Recoleccion = 80}, Habilidad = "Cosecha almas para aumentar su daño temporalmente"},
+	{Name = "Espiritu de la Dimension",    Rarity = "Mitico",     Stats = {Ataque = 120, Vida = 140, Inventario = 120, Recoleccion = 120}, Habilidad = "Permite abrir portales de escape rápidos"},
+	{Name = "Espiritu del Infinito",       Rarity = "Mitico",     Stats = {Ataque = 150, Vida = 150, Inventario = 150, Recoleccion = 150}, Habilidad = "Multiplica todos los recursos obtenidos por 2"},
+	
+	-- DEMON
+	{Name = "Espiritu Demonio",            Rarity = "Demon",      Stats = {Ataque = 220, Vida = 250, Inventario = 180, Recoleccion = 160}, Habilidad = "Sinfonía de destrucción infernal"},
+	{Name = "Espiritu de la Perdicion",    Rarity = "Demon",      Stats = {Ataque = 260, Vida = 220, Inventario = 160, Recoleccion = 180}, Habilidad = "Maldice zonas reduciendo la velocidad enemiga"},
+	{Name = "Espiritu de la Pesadilla",    Rarity = "Demon",      Stats = {Ataque = 300, Vida = 200, Inventario = 200, Recoleccion = 200}, Habilidad = "Duerme a los enemigos con ataques oscuros"},
+	{Name = "Espiritu Infernal",           Rarity = "Demon",      Stats = {Ataque = 350, Vida = 280, Inventario = 150, Recoleccion = 150}, Habilidad = "Explosiones volcánicas pasivas"},
+	{Name = "Espiritu del Abismo",         Rarity = "Demon",      Stats = {Ataque = 400, Vida = 350, Inventario = 220, Recoleccion = 220}, Habilidad = "Traga enemigos pequeños al vacío"},
+	
+	-- DIVINOS
+	{Name = "Espiritu Angel",              Rarity = "Divino",     Stats = {Ataque = 500, Vida = 600, Inventario = 400, Recoleccion = 400}, Habilidad = "Escudo divino de invulnerabilidad temporal"},
+	{Name = "Espiritu Celestial",          Rarity = "Divino",     Stats = {Ataque = 650, Vida = 550, Inventario = 450, Recoleccion = 450}, Habilidad = "Rayo orbital sagrado automático"},
+	{Name = "Espiritu del Destino",        Rarity = "Divino",     Stats = {Ataque = 800, Vida = 500, Inventario = 500, Recoleccion = 500}, Habilidad = "Altera la suerte de obtención de objetos raros"},
+	{Name = "Espiritu de la Creacion",     Rarity = "Divino",     Stats = {Ataque = 1000, Vida = 700, Inventario = 600, Recoleccion = 600}, Habilidad = "Genera materiales exóticos de la nada"},
+	{Name = "Espiritu del Universo",       Rarity = "Divino",     Stats = {Ataque = 1500, Vida = 1000, Inventario = 800, Recoleccion = 800}, Habilidad = "Colapso estelar: Daño masivo a todo el mapa"},
+	
+	-- ESPECIAL
+	{Name = "Espiritu Santo",              Rarity = "Especial",   Stats = {Ataque = 5000, Vida = 5000, Inventario = 2000, Recoleccion = 2000}, Habilidad = "Bendición Absoluta: Stats perfectos e inmortalidad"},
 }
 
 local function findSpiritData(spiritName)
@@ -2400,7 +2420,6 @@ local function createBillboard(part, spiritData)
 	billboard.ClipsDescendants = false
 	billboard.Parent = part
 
-	-- Esto es lo que fija el tamaño sin importar la distancia
 	local sizeConstraint = Instance.new("UIScale")
 	sizeConstraint.Scale = 1
 	sizeConstraint.Parent = billboard
@@ -2429,24 +2448,28 @@ local function createBillboard(part, spiritData)
 	rarityLabel.TextStrokeTransparency = 0.5
 	rarityLabel.Parent = billboard
 
-	local genLabel = Instance.new("TextLabel")
-	genLabel.Size = UDim2.new(1, 0, 0, 16)
-	genLabel.Position = UDim2.new(0, 0, 0, 48)
-	genLabel.BackgroundTransparency = 1
-	genLabel.Text = "+" .. spiritData.EssenceRate .. " Es/s"
-	genLabel.TextColor3 = Color3.fromRGB(170, 255, 170)
-	genLabel.TextScaled = false
-	genLabel.TextSize = 10
-	genLabel.Font = Enum.Font.Gotham
-	genLabel.TextStrokeTransparency = 0.5
-	genLabel.Parent = billboard
+	-- Modificado: Muestra la habilidad útil del Espíritu en vez del dinero pasivo
+	local skillLabel = Instance.new("TextLabel")
+	skillLabel.Size = UDim2.new(1, 0, 0, 16)
+	skillLabel.Position = UDim2.new(0, 0, 0, 48)
+	skillLabel.BackgroundTransparency = 1
+	skillLabel.Text = spiritData.Habilidad or "Sin Habilidad"
+	skillLabel.TextColor3 = Color3.fromRGB(170, 255, 255)
+	skillLabel.TextScaled = true
+	skillLabel.TextSize = 10
+	skillLabel.Font = Enum.Font.GothamItalic
+	skillLabel.TextStrokeTransparency = 0.5
+	skillLabel.Parent = billboard
 end
 
+-- ========================================================
+-- CARGA DE SPIRITS
+-- ========================================================
 local function loadSpiritsForPlayer(player)
 	local baseNumber = player:GetAttribute("BaseNumber")
 	if not baseNumber then return end
 
-	-- Verificar HeldSpirit
+	-- Verificar HeldSpirit (Restauración limpia sin pasar dinero)
 	local heldSpirit = DataManager.GetHeldSpirit(player)
 	if heldSpirit then
 		local prevBase = tonumber(heldSpirit.PreviousBase)
@@ -2458,14 +2481,16 @@ local function loadSpiritsForPlayer(player)
 			local slot = baseFolder and baseFolder:FindFirstChild("slot" .. prevSlot)
 
 			if slot and not SpiritUtils.GetSpiritInSlot(slot) then
-				DataManager.SaveSpiritToSlot(player, prevBase, prevSlot, heldSpirit.SpiritName, 0)
+				local spiritData = findSpiritData(heldSpirit.SpiritName)
+				DataManager.SaveSpiritToSlot(player, prevBase, prevSlot, heldSpirit.SpiritName, spiritData and spiritData.Stats)
 				print("[SpiritLoader] Spirit restaurado a slot" .. prevSlot)
 			else
 				if baseFolder then
 					for s = 1, 10 do
 						local freeSlot = baseFolder:FindFirstChild("slot" .. s)
 						if freeSlot and not SpiritUtils.GetSpiritInSlot(freeSlot) then
-							DataManager.SaveSpiritToSlot(player, prevBase, s, heldSpirit.SpiritName, 0)
+							local spiritData = findSpiritData(heldSpirit.SpiritName)
+							DataManager.SaveSpiritToSlot(player, prevBase, s, heldSpirit.SpiritName, spiritData and spiritData.Stats)
 							print("[SpiritLoader] Spirit restaurado a slot libre " .. s)
 							break
 						end
@@ -2476,15 +2501,14 @@ local function loadSpiritsForPlayer(player)
 		end
 	end
 
-	-- Carga normal de Spirits
+	-- Carga normal de Spirits desde los datos limpios del DataManager
 	local baseSpirits = DataManager.GetBaseSpirits(player, baseNumber)
 	if not baseSpirits then return end
 
 	local base = Workspace:FindFirstChild("base" .. baseNumber)
 	if not base then return end
 
-	local baseFolder = base:FindFirstChild("based")
-		and base.based:FindFirstChild("base")
+	local baseFolder = base:FindFirstChild("based") and base.based:FindFirstChild("base")
 	if not baseFolder then return end
 
 	for slotKey, spiritSaveData in pairs(baseSpirits) do
@@ -2493,7 +2517,6 @@ local function loadSpiritsForPlayer(player)
 
 		local slot = baseFolder:FindFirstChild("slot" .. slotNumber)
 		if not slot then continue end
-
 		if SpiritUtils.GetSpiritInSlot(slot) then continue end
 
 		local spiritData = findSpiritData(spiritSaveData.SpiritName)
@@ -2513,23 +2536,25 @@ local function loadSpiritsForPlayer(player)
 			spirit.Shape = Enum.PartType.Ball
 			spirit.Size = Vector3.new(3, 3, 3)
 			spirit.Material = Enum.Material.Neon
-			warn("[SpiritLoader] Modelo no encontrado, usando fallback: " .. spiritData.Name)
+			warn("[SpiritLoader] Modelo no encontrado, usando fallback para: " .. spiritData.Name)
 		end
 
-		-- ... (tu código anterior)
-
-		-- ✅ VERSIÓN CORREGIDA
 		SpiritUtils.SetupSpirit(spirit)
 		SpiritPositionManager.PlaceInSlot(spirit, slot)
 		
-	    spirit.Name = "Spirit"
+		spirit.Name = "Spirit"
 		spirit:SetAttribute("Rarity", spiritData.Rarity)
-		spirit:SetAttribute("EssenceRate", spiritData.EssenceRate)
-		spirit:SetAttribute("SpiriumValue", spiritData.SpiriumValue)
 		spirit:SetAttribute("SpiritName", spiritData.Name)
 		spirit:SetAttribute("FromSlot", true)
 		spirit:SetAttribute("SpiritState", "Base")
-		spirit:SetAttribute("AccumulatedEssence", spiritSaveData.AccumulatedEssence or 0)
+
+		-- ✅ Cargar las estadísticas útiles de combate/recolección en atributos del objeto
+		if spiritData.Stats then
+			spirit:SetAttribute("Ataque", spiritData.Stats.Ataque)
+			spirit:SetAttribute("Vida", spiritData.Stats.Vida)
+			spirit:SetAttribute("Inventario", spiritData.Stats.Inventario)
+			spirit:SetAttribute("Recoleccion", spiritData.Stats.Recoleccion)
+		end
 
 		local br = Instance.new("ObjectValue")
 		br.Name = "Breaker"
@@ -2543,7 +2568,7 @@ local function loadSpiritsForPlayer(player)
 			setupModule(spirit)
 		end
 
-		print("[SpiritLoader] Spirit cargado: " .. spiritData.Name .. " en slot" .. slotNumber)
+		print("[SpiritLoader] Spirit cargado: " .. spiritData.Name .. " en slot " .. slotNumber)
 	end
 end
 
@@ -2558,8 +2583,7 @@ Players.PlayerAdded:Connect(function(player)
 	loadSpiritsForPlayer(player)
 end)
 
-print("✅ [SpiritLoader] Sistema de carga de Spirits iniciado.")
-
+print("✅ [SpiritLoader] Completamente actualizado para Tom Studios™.")
 22./TurretMobileController
 
 -- Script en ServerScriptService
