@@ -2328,86 +2328,91 @@ local SpiritUtils = require(ServerScriptService:WaitForChild("SpiritUtils"))
 local SpiritTemplate = ReplicatedStorage:WaitForChild("SpiritTemplate")
 
 -- ========================================================
--- SPIRIT DATABASE (COMPLETA Y ADAPTADA A NUEVAS STATS)
+-- SPIRIT DATABASE (COMPLETA CON STATS)
 -- ========================================================
 local SpiritDatabase = {
 	-- COMUNES
-	{Name = "Espiritu de Tierra",          Rarity = "Comun",      Stats = {Ataque = 2, Vida = 10, Inventario = 5, Recoleccion = 4}, Habilidad = "+20% defensa cerca de la base"},
-	{Name = "Espiritu de Brisa",           Rarity = "Comun",      Stats = {Ataque = 3, Vida = 4,  Inventario = 6, Recoleccion = 7}, Habilidad = "+10% velocidad al jugador"},
-	{Name = "Espiritu de Gota",            Rarity = "Comun",      Stats = {Ataque = 2, Vida = 6,  Inventario = 5, Recoleccion = 6}, Habilidad = "Curación lenta"},
-	{Name = "Espiritu de Musgo",           Rarity = "Comun",      Stats = {Ataque = 1, Vida = 7,  Inventario = 10, Recoleccion = 10}, Habilidad = "Recolecta plantas más rápido"},
-	{Name = "Espiritu de Chispa",          Rarity = "Comun",      Stats = {Ataque = 6, Vida = 3,  Inventario = 3, Recoleccion = 2}, Habilidad = "Golpe eléctrico ocasional"},
-	
+	{Name = "Espiritu de Tierra", Rarity = "Comun", Stats = {Ataque = 2, Vida = 10, Inventario = 5, Recoleccion = 4}, Habilidad = "+20% defensa cerca de la base"},
+	{Name = "Espiritu de Brisa", Rarity = "Comun", Stats = {Ataque = 3, Vida = 4, Inventario = 6, Recoleccion = 7}, Habilidad = "+10% velocidad al jugador"},
+	{Name = "Espiritu de Gota", Rarity = "Comun", Stats = {Ataque = 2, Vida = 6, Inventario = 5, Recoleccion = 6}, Habilidad = "Curación lenta"},
+	{Name = "Espiritu de Musgo", Rarity = "Comun", Stats = {Ataque = 1, Vida = 7, Inventario = 10, Recoleccion = 10}, Habilidad = "Recolecta plantas más rápido"},
+	{Name = "Espiritu de Chispa", Rarity = "Comun", Stats = {Ataque = 6, Vida = 3, Inventario = 3, Recoleccion = 2}, Habilidad = "Golpe eléctrico ocasional"},
+
 	-- POCO COMUNES
-	{Name = "Espiritu de Arena",           Rarity = "Poco Comun", Stats = {Ataque = 5, Vida = 15, Inventario = 12, Recoleccion = 12}, Habilidad = "Crea tormentas de arena de soporte"},
-	{Name = "Espiritu de Hielo",           Rarity = "Poco Comun", Stats = {Ataque = 7, Vida = 12, Inventario = 10, Recoleccion = 11}, Habilidad = "Congela enemigos cercanos"},
-	{Name = "Espiritu de Fuego",           Rarity = "Poco Comun", Stats = {Ataque = 10, Vida = 10, Inventario = 8, Recoleccion = 9}, Habilidad = "Quema objetivos en área"},
-	{Name = "Espiritu de Cristal",         Rarity = "Poco Comun", Stats = {Ataque = 6, Vida = 20, Inventario = 15, Recoleccion = 8}, Habilidad = "Refleja daño recibido"},
-	{Name = "Espiritu de Trueno",          Rarity = "Poco Comun", Stats = {Ataque = 12, Vida = 8,  Inventario = 8, Recoleccion = 10}, Habilidad = "Encadena rayos entre rivales"},
-	
+	{Name = "Espiritu de Arena", Rarity = "Poco Comun", Stats = {Ataque = 5, Vida = 15, Inventario = 12, Recoleccion = 12}, Habilidad = "Crea tormentas de arena de soporte"},
+	{Name = "Espiritu de Hielo", Rarity = "Poco Comun", Stats = {Ataque = 7, Vida = 12, Inventario = 10, Recoleccion = 11}, Habilidad = "Congela enemigos cercanos"},
+	{Name = "Espiritu de Fuego", Rarity = "Poco Comun", Stats = {Ataque = 10, Vida = 10, Inventario = 8, Recoleccion = 9}, Habilidad = "Quema objetivos en área"},
+	{Name = "Espiritu de Cristal", Rarity = "Poco Comun", Stats = {Ataque = 6, Vida = 20, Inventario = 15, Recoleccion = 8}, Habilidad = "Refleja daño recibido"},
+	{Name = "Espiritu de Trueno", Rarity = "Poco Comun", Stats = {Ataque = 12, Vida = 8, Inventario = 8, Recoleccion = 10}, Habilidad = "Encadena rayos entre rivales"},
+
 	-- RAROS
-	{Name = "Espiritu del Bosque",         Rarity = "Raro",       Stats = {Ataque = 12, Vida = 30, Inventario = 25, Recoleccion = 25}, Habilidad = "Duplica madera recolectada"},
-	{Name = "Espiritu Marino",             Rarity = "Raro",       Stats = {Ataque = 14, Vida = 28, Inventario = 22, Recoleccion = 24}, Habilidad = "Ataques de agua a distancia"},
-	{Name = "Espiritu de Luna",            Rarity = "Raro",       Stats = {Ataque = 16, Vida = 25, Inventario = 20, Recoleccion = 22}, Habilidad = "Brilla en la oscuridad y potencia stats de noche"},
-	{Name = "Espiritu de Sombra",          Rarity = "Raro",       Stats = {Ataque = 20, Vida = 20, Inventario = 18, Recoleccion = 20}, Habilidad = "Se vuelve invisible al recibir daño crítico"},
-	{Name = "Espiritu del Viento Supremo", Rarity = "Raro",       Stats = {Ataque = 15, Vida = 24, Inventario = 24, Recoleccion = 28}, Habilidad = "Empuja enemigos lejos del jugador"},
-	
+	{Name = "Espiritu del Bosque", Rarity = "Raro", Stats = {Ataque = 12, Vida = 30, Inventario = 25, Recoleccion = 25}, Habilidad = "Duplica madera recolectada"},
+	{Name = "Espiritu Marino", Rarity = "Raro", Stats = {Ataque = 14, Vida = 28, Inventario = 22, Recoleccion = 24}, Habilidad = "Ataques de agua a distancia"},
+	{Name = "Espiritu de Luna", Rarity = "Raro", Stats = {Ataque = 16, Vida = 25, Inventario = 20, Recoleccion = 22}, Habilidad = "Brilla en la oscuridad y potencia stats de noche"},
+	{Name = "Espiritu de Sombra", Rarity = "Raro", Stats = {Ataque = 20, Vida = 20, Inventario = 18, Recoleccion = 20}, Habilidad = "Se vuelve invisible al recibir daño crítico"},
+	{Name = "Espiritu del Viento Supremo", Rarity = "Raro", Stats = {Ataque = 15, Vida = 24, Inventario = 24, Recoleccion = 28}, Habilidad = "Empuja enemigos lejos del jugador"},
+
 	-- ÉPICOS
-	{Name = "Espiritu Fantasma",           Rarity = "Epico",      Stats = {Ataque = 25, Vida = 40, Inventario = 35, Recoleccion = 35}, Habilidad = "Atraviesa defensas enemigas"},
-	{Name = "Espiritu Arcano",             Rarity = "Epico",      Stats = {Ataque = 30, Vida = 35, Inventario = 30, Recoleccion = 32}, Habilidad = "Potencia las habilidades de otros espíritus"},
-	{Name = "Espiritu de Magma",           Rarity = "Epico",      Stats = {Ataque = 35, Vida = 45, Inventario = 28, Recoleccion = 30}, Habilidad = "Inmune al fuego y charcos de lava"},
-	{Name = "Espiritu de Tormenta",        Rarity = "Epico",      Stats = {Ataque = 32, Vida = 38, Inventario = 32, Recoleccion = 38}, Habilidad = "Genera tornados de recolección masiva"},
-	{Name = "Espiritu del Vacio",          Rarity = "Epico",      Stats = {Ataque = 40, Vida = 30, Inventario = 40, Recoleccion = 30}, Habilidad = "Teletransporta recursos directamente al inventario"},
-	
+	{Name = "Espiritu Fantasma", Rarity = "Epico", Stats = {Ataque = 25, Vida = 40, Inventario = 35, Recoleccion = 35}, Habilidad = "Atraviesa defensas enemigas"},
+	{Name = "Espiritu Arcano", Rarity = "Epico", Stats = {Ataque = 30, Vida = 35, Inventario = 30, Recoleccion = 32}, Habilidad = "Potencia las habilidades de otros espíritus"},
+	{Name = "Espiritu de Magma", Rarity = "Epico", Stats = {Ataque = 35, Vida = 45, Inventario = 28, Recoleccion = 30}, Habilidad = "Inmune al fuego y charcos de lava"},
+	{Name = "Espiritu de Tormenta", Rarity = "Epico", Stats = {Ataque = 32, Vida = 38, Inventario = 32, Recoleccion = 38}, Habilidad = "Genera tornados de recolección masiva"},
+	{Name = "Espiritu del Vacio", Rarity = "Epico", Stats = {Ataque = 40, Vida = 30, Inventario = 40, Recoleccion = 30}, Habilidad = "Teletransporta recursos directamente al inventario"},
+
 	-- LEGENDARIOS
-	{Name = "Espiritu de la Vida",         Rarity = "Legendario", Stats = {Ataque = 45, Vida = 100, Inventario = 60, Recoleccion = 55}, Habilidad = "Revive al jugador una vez por incursión"},
-	{Name = "Espiritu de la Estrella",     Rarity = "Legendario", Stats = {Ataque = 55, Vida = 80,  Inventario = 55, Recoleccion = 65}, Habilidad = "Lluvia de meteoros de corto alcance"},
-	{Name = "Espiritu del Sol",            Rarity = "Legendario", Stats = {Ataque = 70, Vida = 75,  Inventario = 50, Recoleccion = 50}, Habilidad = "Ciega y desorienta a los monstruos"},
-	{Name = "Espiritu del Tiempo",         Rarity = "Legendario", Stats = {Ataque = 50, Vida = 90,  Inventario = 58, Recoleccion = 58}, Habilidad = "Ralentiza el tiempo de los enemigos cercanos"},
-	{Name = "Espiritu del Dragon",         Rarity = "Legendario", Stats = {Ataque = 85, Vida = 85,  Inventario = 45, Recoleccion = 45}, Habilidad = "Lanzallamas continuo de alto daño"},
-	
+	{Name = "Espiritu de la Vida", Rarity = "Legendario", Stats = {Ataque = 45, Vida = 100, Inventario = 60, Recoleccion = 55}, Habilidad = "Revive al jugador una vez por incursión"},
+	{Name = "Espiritu de la Estrella", Rarity = "Legendario", Stats = {Ataque = 55, Vida = 80, Inventario = 55, Recoleccion = 65}, Habilidad = "Lluvia de meteoros de corto alcance"},
+	{Name = "Espiritu del Sol", Rarity = "Legendario", Stats = {Ataque = 70, Vida = 75, Inventario = 50, Recoleccion = 50}, Habilidad = "Ciega y desorienta a los monstruos"},
+	{Name = "Espiritu del Tiempo", Rarity = "Legendario", Stats = {Ataque = 50, Vida = 90, Inventario = 58, Recoleccion = 58}, Habilidad = "Ralentiza el tiempo de los enemigos cercanos"},
+	{Name = "Espiritu del Dragon", Rarity = "Legendario", Stats = {Ataque = 85, Vida = 85, Inventario = 45, Recoleccion = 45}, Habilidad = "Lanzallamas continuo de alto daño"},
+
 	-- MÍTICOS
-	{Name = "Espiritu del Caos",           Rarity = "Mitico",     Stats = {Ataque = 110, Vida = 150, Inventario = 100, Recoleccion = 90}, Habilidad = "Efectos aleatorios devastadores por golpe"},
-	{Name = "Espiritu del Juicio",         Rarity = "Mitico",     Stats = {Ataque = 130, Vida = 130, Inventario = 90,  Recoleccion = 100}, Habilidad = "Aniquila instantáneamente enemigos débiles"},
-	{Name = "Espiritu de la Muerte",       Rarity = "Mitico",     Stats = {Ataque = 160, Vida = 110, Inventario = 80,  Recoleccion = 80}, Habilidad = "Cosecha almas para aumentar su daño temporalmente"},
-	{Name = "Espiritu de la Dimension",    Rarity = "Mitico",     Stats = {Ataque = 120, Vida = 140, Inventario = 120, Recoleccion = 120}, Habilidad = "Permite abrir portales de escape rápidos"},
-	{Name = "Espiritu del Infinito",       Rarity = "Mitico",     Stats = {Ataque = 150, Vida = 150, Inventario = 150, Recoleccion = 150}, Habilidad = "Multiplica todos los recursos obtenidos por 2"},
-	
+	{Name = "Espiritu del Caos", Rarity = "Mitico", Stats = {Ataque = 110, Vida = 150, Inventario = 100, Recoleccion = 90}, Habilidad = "Efectos aleatorios devastadores por golpe"},
+	{Name = "Espiritu del Juicio", Rarity = "Mitico", Stats = {Ataque = 130, Vida = 130, Inventario = 90, Recoleccion = 100}, Habilidad = "Aniquila instantáneamente enemigos débiles"},
+	{Name = "Espiritu de la Muerte", Rarity = "Mitico", Stats = {Ataque = 160, Vida = 110, Inventario = 80, Recoleccion = 80}, Habilidad = "Cosecha almas para aumentar su daño temporalmente"},
+	{Name = "Espiritu de la Dimension", Rarity = "Mitico", Stats = {Ataque = 120, Vida = 140, Inventario = 120, Recoleccion = 120}, Habilidad = "Permite abrir portales de escape rápidos"},
+	{Name = "Espiritu del Infinito", Rarity = "Mitico", Stats = {Ataque = 150, Vida = 150, Inventario = 150, Recoleccion = 150}, Habilidad = "Multiplica todos los recursos obtenidos por 2"},
+
 	-- DEMON
-	{Name = "Espiritu Demonio",            Rarity = "Demon",      Stats = {Ataque = 220, Vida = 250, Inventario = 180, Recoleccion = 160}, Habilidad = "Sinfonía de destrucción infernal"},
-	{Name = "Espiritu de la Perdicion",    Rarity = "Demon",      Stats = {Ataque = 260, Vida = 220, Inventario = 160, Recoleccion = 180}, Habilidad = "Maldice zonas reduciendo la velocidad enemiga"},
-	{Name = "Espiritu de la Pesadilla",    Rarity = "Demon",      Stats = {Ataque = 300, Vida = 200, Inventario = 200, Recoleccion = 200}, Habilidad = "Duerme a los enemigos con ataques oscuros"},
-	{Name = "Espiritu Infernal",           Rarity = "Demon",      Stats = {Ataque = 350, Vida = 280, Inventario = 150, Recoleccion = 150}, Habilidad = "Explosiones volcánicas pasivas"},
-	{Name = "Espiritu del Abismo",         Rarity = "Demon",      Stats = {Ataque = 400, Vida = 350, Inventario = 220, Recoleccion = 220}, Habilidad = "Traga enemigos pequeños al vacío"},
-	
+	{Name = "Espiritu Demonio", Rarity = "Demon", Stats = {Ataque = 220, Vida = 250, Inventario = 180, Recoleccion = 160}, Habilidad = "Sinfonía de destrucción infernal"},
+	{Name = "Espiritu de la Perdicion", Rarity = "Demon", Stats = {Ataque = 260, Vida = 220, Inventario = 160, Recoleccion = 180}, Habilidad = "Maldice zonas reduciendo la velocidad enemiga"},
+	{Name = "Espiritu de la Pesadilla", Rarity = "Demon", Stats = {Ataque = 300, Vida = 200, Inventario = 200, Recoleccion = 200}, Habilidad = "Duerme a los enemigos con ataques oscuros"},
+	{Name = "Espiritu Infernal", Rarity = "Demon", Stats = {Ataque = 350, Vida = 280, Inventario = 150, Recoleccion = 150}, Habilidad = "Explosiones volcánicas pasivas"},
+	{Name = "Espiritu del Abismo", Rarity = "Demon", Stats = {Ataque = 400, Vida = 350, Inventario = 220, Recoleccion = 220}, Habilidad = "Traga enemigos pequeños al vacío"},
+
 	-- DIVINOS
-	{Name = "Espiritu Angel",              Rarity = "Divino",     Stats = {Ataque = 500, Vida = 600, Inventario = 400, Recoleccion = 400}, Habilidad = "Escudo divino de invulnerabilidad temporal"},
-	{Name = "Espiritu Celestial",          Rarity = "Divino",     Stats = {Ataque = 650, Vida = 550, Inventario = 450, Recoleccion = 450}, Habilidad = "Rayo orbital sagrado automático"},
-	{Name = "Espiritu del Destino",        Rarity = "Divino",     Stats = {Ataque = 800, Vida = 500, Inventario = 500, Recoleccion = 500}, Habilidad = "Altera la suerte de obtención de objetos raros"},
-	{Name = "Espiritu de la Creacion",     Rarity = "Divino",     Stats = {Ataque = 1000, Vida = 700, Inventario = 600, Recoleccion = 600}, Habilidad = "Genera materiales exóticos de la nada"},
-	{Name = "Espiritu del Universo",       Rarity = "Divino",     Stats = {Ataque = 1500, Vida = 1000, Inventario = 800, Recoleccion = 800}, Habilidad = "Colapso estelar: Daño masivo a todo el mapa"},
-	
+	{Name = "Espiritu Angel", Rarity = "Divino", Stats = {Ataque = 500, Vida = 600, Inventario = 400, Recoleccion = 400}, Habilidad = "Escudo divino de invulnerabilidad temporal"},
+	{Name = "Espiritu Celestial", Rarity = "Divino", Stats = {Ataque = 650, Vida = 550, Inventario = 450, Recoleccion = 450}, Habilidad = "Rayo orbital sagrado automático"},
+	{Name = "Espiritu del Destino", Rarity = "Divino", Stats = {Ataque = 800, Vida = 500, Inventario = 500, Recoleccion = 500}, Habilidad = "Altera la suerte de obtención de objetos raros"},
+	{Name = "Espiritu de la Creacion", Rarity = "Divino", Stats = {Ataque = 1000, Vida = 700, Inventario = 600, Recoleccion = 600}, Habilidad = "Genera materiales exóticos de la nada"},
+	{Name = "Espiritu del Universo", Rarity = "Divino", Stats = {Ataque = 1500, Vida = 1000, Inventario = 800, Recoleccion = 800}, Habilidad = "Colapso estelar: Daño masivo a todo el mapa"},
+
 	-- ESPECIAL
-	{Name = "Espiritu Santo",              Rarity = "Especial",   Stats = {Ataque = 5000, Vida = 5000, Inventario = 2000, Recoleccion = 2000}, Habilidad = "Bendición Absoluta: Stats perfectos e inmortalidad"},
+	{Name = "Espiritu Santo", Rarity = "Especial", Stats = {Ataque = 5000, Vida = 5000, Inventario = 2000, Recoleccion = 2000}, Habilidad = "Bendición Absoluta: Stats perfectos e inmortalidad"},
 }
 
 local function findSpiritData(spiritName)
 	for _, s in ipairs(SpiritDatabase) do
-		if s.Name == spiritName then return s end
+		if s.Name == spiritName then
+			return s
+		end
 	end
 	return nil
 end
 
+-- ========================================================
+-- BILLBOARD
+-- ========================================================
 local RarityColors = {
-	["Comun"]      = Color3.fromRGB(200, 200, 200),
+	["Comun"] = Color3.fromRGB(200, 200, 200),
 	["Poco Comun"] = Color3.fromRGB(80, 200, 80),
-	["Raro"]       = Color3.fromRGB(80, 140, 255),
-	["Epico"]      = Color3.fromRGB(180, 80, 255),
+	["Raro"] = Color3.fromRGB(80, 140, 255),
+	["Epico"] = Color3.fromRGB(180, 80, 255),
 	["Legendario"] = Color3.fromRGB(255, 200, 50),
-	["Mitico"]     = Color3.fromRGB(255, 80, 80),
-	["Demon"]      = Color3.fromRGB(200, 50, 50),
-	["Divino"]     = Color3.fromRGB(255, 220, 100),
-	["Especial"]   = Color3.fromRGB(255, 255, 255),
+	["Mitico"] = Color3.fromRGB(255, 80, 80),
+	["Demon"] = Color3.fromRGB(200, 50, 50),
+	["Divino"] = Color3.fromRGB(255, 220, 100),
+	["Especial"] = Color3.fromRGB(255, 255, 255),
 }
 
 local function createBillboard(part, spiritData)
@@ -2417,12 +2422,7 @@ local function createBillboard(part, spiritData)
 	billboard.StudsOffset = Vector3.new(0, 3.8, 0)
 	billboard.AlwaysOnTop = true
 	billboard.MaxDistance = 80
-	billboard.ClipsDescendants = false
 	billboard.Parent = part
-
-	local sizeConstraint = Instance.new("UIScale")
-	sizeConstraint.Scale = 1
-	sizeConstraint.Parent = billboard
 
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Size = UDim2.new(1, 0, 0, 32)
@@ -2448,7 +2448,6 @@ local function createBillboard(part, spiritData)
 	rarityLabel.TextStrokeTransparency = 0.5
 	rarityLabel.Parent = billboard
 
-	-- Modificado: Muestra la habilidad útil del Espíritu en vez del dinero pasivo
 	local skillLabel = Instance.new("TextLabel")
 	skillLabel.Size = UDim2.new(1, 0, 0, 16)
 	skillLabel.Position = UDim2.new(0, 0, 0, 48)
@@ -2469,8 +2468,12 @@ local function loadSpiritsForPlayer(player)
 	local baseNumber = player:GetAttribute("BaseNumber")
 	if not baseNumber then return end
 
-	-- Verificar HeldSpirit (Restauración limpia sin pasar dinero)
-	local heldSpirit = DataManager.GetHeldSpirit(player)
+	-- HELD SPIRIT
+	local heldSpirit: any = nil
+	if DataManager and typeof(DataManager.GetHeldSpirit) == "function" then
+		heldSpirit = DataManager.GetHeldSpirit(player)
+	end
+
 	if heldSpirit then
 		local prevBase = tonumber(heldSpirit.PreviousBase)
 		local prevSlot = tonumber(heldSpirit.PreviousSlot)
@@ -2478,31 +2481,46 @@ local function loadSpiritsForPlayer(player)
 		if prevBase and prevSlot and prevBase == baseNumber then
 			local base = Workspace:FindFirstChild("base" .. prevBase)
 			local baseFolder = base and base:FindFirstChild("based") and base.based:FindFirstChild("base")
-			local slot = baseFolder and baseFolder:FindFirstChild("slot" .. prevSlot)
 
-			if slot and not SpiritUtils.GetSpiritInSlot(slot) then
-				local spiritData = findSpiritData(heldSpirit.SpiritName)
-				DataManager.SaveSpiritToSlot(player, prevBase, prevSlot, heldSpirit.SpiritName, spiritData and spiritData.Stats)
-				print("[SpiritLoader] Spirit restaurado a slot" .. prevSlot)
+			local spiritName = heldSpirit.SpiritName
+			local spiritData = findSpiritData(spiritName)
+
+			if not spiritData then
+				warn("[SpiritLoader] Spirit no encontrado en SpiritDatabase:", tostring(spiritName))
 			else
-				if baseFolder then
-					for s = 1, 10 do
-						local freeSlot = baseFolder:FindFirstChild("slot" .. s)
-						if freeSlot and not SpiritUtils.GetSpiritInSlot(freeSlot) then
-							local spiritData = findSpiritData(heldSpirit.SpiritName)
-							DataManager.SaveSpiritToSlot(player, prevBase, s, heldSpirit.SpiritName, spiritData and spiritData.Stats)
-							print("[SpiritLoader] Spirit restaurado a slot libre " .. s)
-							break
+				local originalSlot = baseFolder and baseFolder:FindFirstChild("slot" .. prevSlot)
+
+				if originalSlot and not SpiritUtils.GetSpiritInSlot(originalSlot) then
+					DataManager.SaveSpiritToSlot(player, prevBase, prevSlot, spiritName, spiritData.Stats)
+					print("[SpiritLoader] Spirit restaurado en slot original:", prevSlot)
+				else
+					if baseFolder then
+						for s = 1, 10 do
+							local freeSlot = baseFolder:FindFirstChild("slot" .. s)
+							if freeSlot and not SpiritUtils.GetSpiritInSlot(freeSlot) then
+								DataManager.SaveSpiritToSlot(player, prevBase, s, spiritName, spiritData.Stats)
+								print("[SpiritLoader] Spirit restaurado en slot libre:", s)
+								break
+							end
 						end
 					end
 				end
 			end
-			DataManager.ClearHeldSpirit(player)
+
+			if DataManager.ClearHeldSpirit then
+				DataManager.ClearHeldSpirit(player)
+			end
 		end
 	end
 
-	-- Carga normal de Spirits desde los datos limpios del DataManager
-	local baseSpirits = DataManager.GetBaseSpirits(player, baseNumber)
+	-- CARGA NORMAL DE SPIRITS
+	local baseSpirits = nil
+	if DataManager and typeof(DataManager.GetBaseSpirits) == "function" then
+		baseSpirits = DataManager.GetBaseSpirits(player, baseNumber)
+	else
+		warn("⚠️ [SpiritLoader] La función 'GetBaseSpirits' no existe en DataManager. Saltando carga normal.")
+	end
+
 	if not baseSpirits then return end
 
 	local base = Workspace:FindFirstChild("base" .. baseNumber)
@@ -2521,7 +2539,7 @@ local function loadSpiritsForPlayer(player)
 
 		local spiritData = findSpiritData(spiritSaveData.SpiritName)
 		if not spiritData then
-			warn("[SpiritLoader] Spirit no encontrado en DB: " .. tostring(spiritSaveData.SpiritName))
+			warn("[SpiritLoader] Spirit no encontrado en DB:", spiritSaveData.SpiritName)
 			continue
 		end
 
@@ -2536,19 +2554,17 @@ local function loadSpiritsForPlayer(player)
 			spirit.Shape = Enum.PartType.Ball
 			spirit.Size = Vector3.new(3, 3, 3)
 			spirit.Material = Enum.Material.Neon
-			warn("[SpiritLoader] Modelo no encontrado, usando fallback para: " .. spiritData.Name)
 		end
 
 		SpiritUtils.SetupSpirit(spirit)
 		SpiritPositionManager.PlaceInSlot(spirit, slot)
-		
+
 		spirit.Name = "Spirit"
 		spirit:SetAttribute("Rarity", spiritData.Rarity)
 		spirit:SetAttribute("SpiritName", spiritData.Name)
 		spirit:SetAttribute("FromSlot", true)
 		spirit:SetAttribute("SpiritState", "Base")
 
-		-- ✅ Cargar las estadísticas útiles de combate/recolección en atributos del objeto
 		if spiritData.Stats then
 			spirit:SetAttribute("Ataque", spiritData.Stats.Ataque)
 			spirit:SetAttribute("Vida", spiritData.Stats.Vida)
@@ -2568,22 +2584,20 @@ local function loadSpiritsForPlayer(player)
 			setupModule(spirit)
 		end
 
-		print("[SpiritLoader] Spirit cargado: " .. spiritData.Name .. " en slot " .. slotNumber)
+		print("[SpiritLoader] Spirit cargado:", spiritData.Name, "en slot", slotNumber)
 	end
-end
+end -- 👈 AQUÍ ESTÁ EL 'END' QUE HACÍA FALTA PARA CERRAR LA FUNCIÓN PRINCIPAL
 
+-- ========================================================
+-- EVENTO DE JUGADOR
+-- ========================================================
 Players.PlayerAdded:Connect(function(player)
-	local tries = 0
-	repeat
-		task.wait(0.5)
-		tries += 1
-	until player:GetAttribute("BaseNumber") ~= nil or tries >= 20
-
+	repeat task.wait(0.5) until player:GetAttribute("BaseNumber") ~= nil
 	task.wait(1)
 	loadSpiritsForPlayer(player)
 end)
 
-print("✅ [SpiritLoader] Completamente actualizado para Tom Studios™.")
+print("✅ [SpiritLoader] Reconstruido completamente sin errores de sintaxis.")
 22./TurretMobileController
 
 -- Script en ServerScriptService
@@ -2789,6 +2803,9 @@ Players.PlayerAdded:Connect(function(player)
 	end)
 end)
 
+25 DataManager
+
+
 --!strict
 -- ModuleScript: DataManager
 -- Ubicación: ServerScriptService
@@ -2801,51 +2818,42 @@ local PlayerDataStore = DataStoreService:GetDataStore(GAME_DATA_STORE_NAME)
 
 local DataManager = {}
 local sessionData = {}
-local AUTOSAVE_INTERVAL = 300 -- 5 minutos (¡Vital para no perder progreso!)
+local AUTOSAVE_INTERVAL = 300
 
 -- ========================================================
--- DATOS POR DEFECTO (ENFOQUE DE EQUIPOS)
+-- CONFIGURACIÓN
+-- ========================================================
+local MAX_EQUIPOS = 3
+local MAX_SPIRITS_POR_EQUIPO = 4
+
+-- ========================================================
+-- DATOS POR DEFECTO
 -- ========================================================
 local DEFAULT_DATA = {
 	Version = 1,
 	LastLogin = 0,
 	HeldSpirit = nil,
-
-	-- Rebirths y Progresión básica
 	Rebirths = 0,
 	EspaciosMaxBase = 1,
 	BonoCriticoPorcentual = 0,
 
 	Turret = {
-		Stats = {
-			Damage = 10, ProjectileSpeed = 450, ProjectileSize = 4,
-			FireRate = 0.15, Range = 200, CritChance = 0, MultiShot = 1,
-		},
-		Levels = {
-			Damage = 0, ProjectileSpeed = 0, ProjectileSize = 0,
-			FireRate = 0, Range = 0, CritChance = 0, MultiShot = 0,
-		}
+		Stats = { Damage = 10, ProjectileSpeed = 450, ProjectileSize = 4, FireRate = 0.15, Range = 200, CritChance = 0, MultiShot = 1 },
+		Levels = { Damage = 0, ProjectileSpeed = 0, ProjectileSize = 0, FireRate = 0, Range = 0, CritChance = 0, MultiShot = 0 }
 	},
 
-	-- Almacenamiento de los Spirits
 	Spirits = {},
-
-	-- EQUIPOS DEL JUGADOR
 	Equipos = {}
 }
 
 -- ========================================================
--- FUNCIONES INTERNAS (RECONCILIACIÓN Y COPIA)
+-- FUNCIONES INTERNAS
 -- ========================================================
 local function reconcile(target, template)
 	for key, value in pairs(template) do
 		if target[key] == nil then
-			if type(value) == "table" then
-				target[key] = {}
-				reconcile(target[key], value)
-			else
-				target[key] = value
-			end
+			target[key] = type(value) == "table" and {} or value
+			if type(value) == "table" then reconcile(target[key], value) end
 		elseif type(value) == "table" and type(target[key]) == "table" then
 			reconcile(target[key], value)
 		end
@@ -2861,80 +2869,44 @@ local function deepCopy(tbl)
 end
 
 -- ========================================================
--- CARGAR / GUARDAR / AUTOSAVE
+-- LOAD / SAVE
 -- ========================================================
-function DataManager.LoadData(player: Player)
-	local key = "Player_" .. tostring(player.UserId)
-	local data = nil
-
+function DataManager.LoadData(player)
+	local key = "Player_" .. player.UserId
 	local success, result = pcall(function()
 		return PlayerDataStore:GetAsync(key)
 	end)
 
-	if success then
-		data = result
-		if data then
-			reconcile(data, DEFAULT_DATA)
-			data.LastLogin = os.time()
-			print("💾 [DataManager] Datos cargados para:", player.Name)
-		else
-			data = deepCopy(DEFAULT_DATA)
-			data.LastLogin = os.time()
-			print("🆕 [DataManager] Nuevo jugador:", player.Name)
-		end
-	else
-		warn("❌ [DataManager] Error al cargar datos de", player.Name)
+	local data = success and result or deepCopy(DEFAULT_DATA)
+	if not success or not result then
 		data = deepCopy(DEFAULT_DATA)
-		player:SetAttribute("DataLoadFailed", true)
 	end
 
+	reconcile(data, DEFAULT_DATA)
+	data.LastLogin = os.time()
 	sessionData[player] = data
 	return data
 end
 
-function DataManager.SaveData(player: Player)
+function DataManager.SaveData(player)
 	local data = sessionData[player]
-	if not data or player:GetAttribute("DataLoadFailed") then return end
-
-	local success, err = pcall(function()
-		PlayerDataStore:SetAsync("Player_" .. tostring(player.UserId), data)
+	if not data then return end
+	pcall(function()
+		PlayerDataStore:SetAsync("Player_" .. player.UserId, data)
 	end)
-
-	if success then
-		print("✅ [DataManager] Datos guardados para:", player.Name)
-	else
-		warn("❌ [DataManager] Error al guardar:", err)
-	end
 end
 
--- 🔄 BUCLE DE AUTOSAVE AUTOMÁTICO
-task.spawn(function()
-	while true do
-		task.wait(AUTOSAVE_INTERVAL)
-		for player, _ in pairs(sessionData) do
-			if player and player.Parent then
-				local ok, err = pcall(function()
-					DataManager.SaveData(player)
-				end)
-				if not ok then
-					warn("⚠️ [DataManager] Error en autosave de", player.Name, "→", tostring(err))
-				end
-			end
-		end
-	end
-end)
-
-function DataManager.GetData(player: Player)
+function DataManager.GetData(player)
 	return sessionData[player]
 end
 
-function DataManager.UpdateData(player: Player, callback)
+function DataManager.UpdateData(player, callback)
 	if sessionData[player] then
 		sessionData[player] = callback(sessionData[player])
 	end
 end
 
-function DataManager.UnloadPlayer(player: Player)
+function DataManager.UnloadPlayer(player)
 	DataManager.SaveData(player)
 	sessionData[player] = nil
 end
@@ -2945,20 +2917,18 @@ end
 function DataManager.SaveSpiritToSlot(player, baseNumber, slotNumber, spiritName, stats)
 	local data = sessionData[player]
 	if not data then return false end
-	if not data.Spirits then data.Spirits = {} end
 
 	local baseKey = tostring(baseNumber)
 	local slotKey = tostring(slotNumber)
 
-	if not data.Spirits[baseKey] then
-		data.Spirits[baseKey] = {}
-	end
+	if not data.Spirits then data.Spirits = {} end
+	if not data.Spirits[baseKey] then data.Spirits[baseKey] = {} end
 
 	data.Spirits[baseKey][slotKey] = {
 		SpiritName = spiritName,
 		Stats = stats or {},
 		Habilidad = stats and stats.Habilidad or "",
-		Rol = "Sin rol",
+		Rol = "Sin rol"
 	}
 	return true
 end
@@ -2968,47 +2938,119 @@ function DataManager.RemoveSpiritFromSlot(player, baseNumber, slotNumber)
 	local baseKey = tostring(baseNumber)
 	local slotKey = tostring(slotNumber)
 
-	if not data or not data.Spirits or not data.Spirits[baseKey] then
-		return false
+	if data and data.Spirits and data.Spirits[baseKey] then
+		data.Spirits[baseKey][slotKey] = nil
 	end
-
-	data.Spirits[baseKey][slotKey] = nil
-	return true
 end
 
 function DataManager.GetBaseSpirits(player, baseNumber)
 	local data = sessionData[player]
 	local baseKey = tostring(baseNumber)
-	if not data or not data.Spirits or not data.Spirits[baseKey] then
-		return {}
-	end
-	return data.Spirits[baseKey]
+	return (data and data.Spirits and data.Spirits[baseKey]) or {}
 end
 
 -- ========================================================
--- GESTIÓN DE EQUIPOS
+-- 🆕 GESTIÓN DE EQUIPOS (COMPLETO)
 -- ========================================================
+
+-- Obtener todos los equipos del jugador
 function DataManager.GetEquipos(player)
 	local data = sessionData[player]
-	if not data then return {} end
-	return data.Equipos or {}
-	}
+	return (data and data.Equipos) or {}
+end
 
-	function DataManager.SaveEquipo(player, equipoNombre, equipoData)
+-- Crear un nuevo equipo
+function DataManager.CreateEquipo(player, equipoNombre)
 	local data = sessionData[player]
-	if not data then return false end
+	if not data then return false, "No se encontraron datos del jugador" end
 
 	if not data.Equipos then data.Equipos = {} end
-	data.Equipos[equipoNombre] = equipoData
+
+	if data.Equipos[equipoNombre] then
+		return false, "Ya existe un equipo con ese nombre"
+	end
+
+	if #data.Equipos >= MAX_EQUIPOS then
+		return false, "Ya tienes el máximo de equipos permitidos (" .. MAX_EQUIPOS .. ")"
+	end
+
+	data.Equipos[equipoNombre] = {
+		Spirits = {} -- Lista de Spirits en el equipo
+	}
+
 	return true
 end
 
+-- Agregar un Spirit a un equipo con rol
+function DataManager.AddSpiritToEquipo(player, equipoNombre, spiritName, rol)
+	local data = sessionData[player]
+	if not data or not data.Equipos or not data.Equipos[equipoNombre] then
+		return false, "Equipo no encontrado"
+	end
+
+	local equipo = data.Equipos[equipoNombre]
+
+	if #equipo.Spirits >= MAX_SPIRITS_POR_EQUIPO then
+		return false, "El equipo ya está lleno (máximo " .. MAX_SPIRITS_POR_EQUIPO .. " Spirits)"
+	end
+
+	-- Verificar que el Spirit no esté ya en este equipo
+	for _, s in ipairs(equipo.Spirits) do
+		if s.SpiritName == spiritName then
+			return false, "Este Spirit ya está en el equipo"
+		end
+	end
+
+	table.insert(equipo.Spirits, {
+		SpiritName = spiritName,
+		Rol = rol or "Sin rol"
+	})
+
+	return true
+end
+
+-- Quitar un Spirit de un equipo
+function DataManager.RemoveSpiritFromEquipo(player, equipoNombre, spiritName)
+	local data = sessionData[player]
+	if not data or not data.Equipos or not data.Equipos[equipoNombre] then
+		return false
+	end
+
+	local equipo = data.Equipos[equipoNombre]
+	for i, s in ipairs(equipo.Spirits) do
+		if s.SpiritName == spiritName then
+			table.remove(equipo.Spirits, i)
+			return true
+		end
+	end
+	return false
+end
+
+-- Cambiar el rol de un Spirit dentro de un equipo
+function DataManager.ChangeSpiritRole(player, equipoNombre, spiritName, nuevoRol)
+	local data = sessionData[player]
+	if not data or not data.Equipos or not data.Equipos[equipoNombre] then
+		return false
+	end
+
+	local equipo = data.Equipos[equipoNombre]
+	for _, s in ipairs(equipo.Spirits) do
+		if s.SpiritName == spiritName then
+			s.Rol = nuevoRol
+			return true
+		end
+	end
+	return false
+end
+
+-- Obtener un equipo específico
 function DataManager.GetEquipo(player, equipoNombre)
 	local data = sessionData[player]
 	if not data or not data.Equipos then return nil end
 	return data.Equipos[equipoNombre]
 end
 
+-- Eliminar un equipo completo
 function DataManager.DeleteEquipo(player, equipoNombre)
 	local data = sessionData[player]
 	if not data or not data.Equipos then return false end
@@ -5105,5 +5147,83 @@ prompt.Triggered:Connect(function(player)
 
 	print(player.Name .. " cambió AllowFriends de la base " .. baseNumber .. " →", newState)
 end)
+
+dentro de STarterGui hay un ScreenGui llamado EquipoGui y dentro de ahi hay un localScript
+
+*EquipoGuiHandler*
+
+-- LocalScript: EquipoGuiHandler
+-- Dentro de EquipoGui
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+
+-- Referencias a la GUI
+local gui = script.Parent
+local mainFrame = gui:WaitForChild("MainFrame")
+local teamList = mainFrame:WaitForChild("TeamList")
+local createButton = mainFrame:WaitForChild("CreateTeamButton")
+
+-- DataManager (lo llamaremos desde el servidor más adelante)
+-- Por ahora usaremos RemoteEvents o _G (después lo mejoramos)
+
+local function refreshTeamList()
+    -- Aquí actualizaremos la lista de equipos que tiene el jugador
+end
+
+local function createNewTeam()
+    -- Aquí se abrirá la ventana para crear un nuevo equipo
+end
+
+-- Conexiones
+createButton.MouseButton1Click:Connect(function()
+    createNewTeam()
+end)
+
+-- Al abrir la GUI
+mainFrame.Visible = false -- Empieza oculta
+
+-- Función para abrir/cerrar la GUI
+local function toggleEquipoGui()
+    mainFrame.Visible = not mainFrame.Visible
+    if mainFrame.Visible then
+        refreshTeamList()
+    end
+end
+
+-- Ejemplo: Puedes conectar esto a un botón que ya tengas en pantalla
+-- _G.ToggleEquipoGui = toggleEquipoGui
+
+-- LocalScript: EquipoGuiHandler
+-- Dentro de EquipoGui
+
+local gui = script.Parent
+
+local mainFrame = gui:WaitForChild("MainFrame")
+local openButton = gui:WaitForChild("OpenEquipoButton")
+
+-- Aseguramos que la GUI principal empiece cerrada
+mainFrame.Visible = false
+
+-- Función para abrir/cerrar la GUI
+local function toggleEquipoGui()
+	mainFrame.Visible = not mainFrame.Visible
+	
+	if mainFrame.Visible then
+		-- Aquí después vamos a poner la función para actualizar la lista de equipos
+		print("[EquipoGui] GUI abierta")
+	else
+		print("[EquipoGui] GUI cerrada")
+	end
+end
+
+-- Conectar el botón
+openButton.MouseButton1Click:Connect(function()
+	toggleEquipoGui()
+end)
+
+print("✅ [EquipoGui] Botón de abrir conectado correctamente.")
+
 
 y ya es todo, si llegaron hasta aca digan patata en el chat
