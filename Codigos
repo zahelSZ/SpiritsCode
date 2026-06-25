@@ -5152,78 +5152,82 @@ dentro de STarterGui hay un ScreenGui llamado EquipoGui y dentro de ahi hay un l
 
 *EquipoGuiHandler*
 
--- LocalScript: EquipoGuiHandler
--- Dentro de EquipoGui
+--- LocalScript: EquipoGuiHandler
+-- Ubicación: StarterGui > EquipoGui > EquipoGuiHandler
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 
--- Referencias a la GUI
 local gui = script.Parent
-local mainFrame = gui:WaitForChild("MainFrame")
-local teamList = mainFrame:WaitForChild("TeamList")
-local createButton = mainFrame:WaitForChild("CreateTeamButton")
-
--- DataManager (lo llamaremos desde el servidor más adelante)
--- Por ahora usaremos RemoteEvents o _G (después lo mejoramos)
-
-local function refreshTeamList()
-    -- Aquí actualizaremos la lista de equipos que tiene el jugador
-end
-
-local function createNewTeam()
-    -- Aquí se abrirá la ventana para crear un nuevo equipo
-end
-
--- Conexiones
-createButton.MouseButton1Click:Connect(function()
-    createNewTeam()
-end)
-
--- Al abrir la GUI
-mainFrame.Visible = false -- Empieza oculta
-
--- Función para abrir/cerrar la GUI
-local function toggleEquipoGui()
-    mainFrame.Visible = not mainFrame.Visible
-    if mainFrame.Visible then
-        refreshTeamList()
-    end
-end
-
--- Ejemplo: Puedes conectar esto a un botón que ya tengas en pantalla
--- _G.ToggleEquipoGui = toggleEquipoGui
-
--- LocalScript: EquipoGuiHandler
--- Dentro de EquipoGui
-
-local gui = script.Parent
-
 local mainFrame = gui:WaitForChild("MainFrame")
 local openButton = gui:WaitForChild("OpenEquipoButton")
+local createButton = mainFrame:WaitForChild("CreateTeamButton")
+local closeButton = mainFrame:WaitForChild("CloseButton")
+local teamList = mainFrame:WaitForChild("TeamList")
+local creationFrame = gui:WaitForChild("TeamCreationFrame")
 
--- Aseguramos que la GUI principal empiece cerrada
+local GetEquiposEvent = ReplicatedStorage:WaitForChild("GetEquiposEvent")
+local CreateEquipoEvent = ReplicatedStorage:WaitForChild("CreateEquipoEvent")
+
 mainFrame.Visible = false
+creationFrame.Visible = false
 
--- Función para abrir/cerrar la GUI
+-- Abrir / Cerrar GUI principal
 local function toggleEquipoGui()
 	mainFrame.Visible = not mainFrame.Visible
-	
 	if mainFrame.Visible then
-		-- Aquí después vamos a poner la función para actualizar la lista de equipos
-		print("[EquipoGui] GUI abierta")
-	else
-		print("[EquipoGui] GUI cerrada")
+		refreshTeamList()
 	end
 end
 
--- Conectar el botón
-openButton.MouseButton1Click:Connect(function()
-	toggleEquipoGui()
+openButton.MouseButton1Click:Connect(toggleEquipoGui)
+closeButton.MouseButton1Click:Connect(function()
+	mainFrame.Visible = false
 end)
 
-print("✅ [EquipoGui] Botón de abrir conectado correctamente.")
+-- Actualizar lista de equipos
+function refreshTeamList()
+	for _, child in ipairs(teamList:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+
+	local equipos = GetEquiposEvent:InvokeServer()
+
+	for equipoNombre, equipoData in pairs(equipos) do
+		local teamFrame = Instance.new("Frame")
+		teamFrame.Size = UDim2.new(1, -10, 0, 55)
+		teamFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+		teamFrame.Parent = teamList
+
+		local nameLabel = Instance.new("TextLabel")
+		nameLabel.Text = equipoNombre
+		nameLabel.Size = UDim2.new(1, 0, 0.55, 0)
+		nameLabel.BackgroundTransparency = 1
+		nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		nameLabel.Font = Enum.Font.GothamBold
+		nameLabel.TextScaled = true
+		nameLabel.Parent = teamFrame
+
+		local countLabel = Instance.new("TextLabel")
+		countLabel.Text = #equipoData.Spirits .. " / 4 Espíritus"
+		countLabel.Size = UDim2.new(1, 0, 0.45, 0)
+		countLabel.Position = UDim2.new(0, 0, 0.55, 0)
+		countLabel.BackgroundTransparency = 1
+		countLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+		countLabel.Font = Enum.Font.Gotham
+		countLabel.TextScaled = true
+		countLabel.Parent = teamFrame
+	end
+end
+
+-- Al presionar "+" se abre la ventana de creación
+createButton.MouseButton1Click:Connect(function()
+	creationFrame.Visible = true
+	mainFrame.Visible = false
+end)
+
+print("✅ [EquipoGui] GUI actualizada correctamente.")
 
 
 y ya es todo, si llegaron hasta aca digan patata en el chat
