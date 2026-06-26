@@ -5152,12 +5152,16 @@ dentro de STarterGui hay un ScreenGui llamado EquipoGui y dentro de ahi hay un l
 
 *EquipoGuiHandler*
 
---- LocalScript: EquipoGuiHandler
+-- LocalScript: EquipoGuiHandler
 -- Ubicación: StarterGui > EquipoGui > EquipoGuiHandler
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
+
+local selectedSlot = nil
+local pendingSpiritData = nil
+local pendingBaseSlot = nil
 
 local gui = script.Parent
 local mainFrame = gui:WaitForChild("MainFrame")
@@ -5166,33 +5170,120 @@ local createButton = mainFrame:WaitForChild("CreateTeamButton")
 local closeButton = mainFrame:WaitForChild("CloseButton")
 local teamList = mainFrame:WaitForChild("TeamList")
 local creationFrame = gui:WaitForChild("TeamCreationFrame")
+local spiritSelectionFrame = creationFrame:WaitForChild("SpiritSelectionFrame")
+local spiritsList = spiritSelectionFrame:WaitForChild("SpiritsList")
+
+-- Buscador seguro del panel de roles
+local roleFrame = gui:FindFirstChild("RoleSelectionFrame", true)
+
+local SpiritTemplate = ReplicatedStorage:WaitForChild("SpiritTemplate")
 
 local GetEquiposEvent = ReplicatedStorage:WaitForChild("GetEquiposEvent")
 local CreateEquipoEvent = ReplicatedStorage:WaitForChild("CreateEquipoEvent")
+local GetBaseSpiritsEvent = ReplicatedStorage:WaitForChild("GetBaseSpiritsEvent")
 
 mainFrame.Visible = false
 creationFrame.Visible = false
+spiritSelectionFrame.Visible = false
+if roleFrame then roleFrame.Visible = false end
 
--- Abrir / Cerrar GUI principal
-local function toggleEquipoGui()
-	mainFrame.Visible = not mainFrame.Visible
-	if mainFrame.Visible then
-		refreshTeamList()
+-- ========================================================
+-- FUNCIÓN AUXILIAR: BUSCAR MODELO DEL ESPÍRITU
+-- ========================================================
+local function findSpiritModel(spiritName: string): Instance?
+	for _, rarityFolder in ipairs(SpiritTemplate:GetChildren()) do
+		local model = rarityFolder:FindFirstChild(spiritName)
+		if model then
+			return model
+		end
+	end
+	return nil
+end
+
+-- ========================================================
+-- FUNCIÓN: CONFIGURAR VIEWPORT
+-- ========================================================
+local function setupViewportForSpirit(viewport: ViewportFrame, spiritName: string)
+	viewport:ClearAllChildren()
+
+	local originalModel = findSpiritModel(spiritName)
+	if originalModel then
+		local clonedModel = originalModel:Clone()
+		if clonedModel:IsA("Model") then
+			clonedModel:PivotTo(CFrame.new(0, 0, 0))
+		elseif clonedModel:IsA("BasePart") then
+			clonedModel.CFrame = CFrame.new(0, 0, 0)
+		end
+		clonedModel.Parent = viewport
+
+		local viewportCamera = Instance.new("Camera")
+		viewportCamera.FieldOfView = 50
+		viewportCamera.CFrame = CFrame.new(Vector3.new(4, 3, 5), Vector3.zero)
+		viewport.CurrentCamera = viewportCamera
+		viewportCamera.Parent = viewport
 	end
 end
 
-openButton.MouseButton1Click:Connect(toggleEquipoGui)
-closeButton.MouseButton1Click:Connect(function()
-	mainFrame.Visible = false
-end)
+-- ========================================================
+-- FUNCIÓN: CREAR ENTRADA CON VIEWPORT FRAME (3D)
+-- ========================================================
+local function createSpiritEntry(spiritSaveData, baseSlot)
+	local spiritName = spiritSaveData.SpiritName or "Espíritu Desconocido"
 
--- Actualizar lista de equipos
-function refreshTeamList()
+	local entryFrame = Instance.new("Frame")
+	entryFrame.Size = UDim2.new(1, -10, 0, 60)
+	entryFrame.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
+	entryFrame.BorderSizePixel = 0
+
+	local uiCorner = Instance.new("UICorner")
+	uiCorner.CornerRadius = UDim.new(0, 8)
+	uiCorner.Parent = entryFrame
+
+	local viewport = Instance.new("ViewportFrame")
+	viewport.Size = UDim2.new(0, 50, 0, 50)
+	viewport.Position = UDim2.new(0, 5, 0, 5)
+	viewport.BackgroundTransparency = 1
+	viewport.Parent = entryFrame
+
+	setupViewportForSpirit(viewport, spiritName)
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.new(1, -70, 1, 0)
+	nameLabel.Position = UDim2.new(0, 65, 0, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = spiritName .. " (Slot " .. tostring(baseSlot) .. ")"
+	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextSize = 13
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.Parent = entryFrame
+
+	-- 🔥 FIJAR LOS DATOS EXACTOS EN EL EVENTO CLICK PARA EVITAR EL CRUCE
+	entryFrame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 
+			or input.UserInputType == Enum.UserInputType.Touch then
+
+			pendingSpiritData = spiritSaveData
+			pendingBaseSlot = baseSlot
+
+			spiritsList.Visible = false
+			if roleFrame then roleFrame.Visible = true end
+			print("🎯 Fijado para asignación:", spiritName, "desde slot base:", baseSlot)
+		end
+	end)
+
+	return entryFrame
+end
+
+-- ====================== FUNCIONES PANEL ======================
+
+local function refreshTeamList()
 	for _, child in ipairs(teamList:GetChildren()) do
 		if child:IsA("Frame") then child:Destroy() end
 	end
 
 	local equipos = GetEquiposEvent:InvokeServer()
+	if not equipos then return end
 
 	for equipoNombre, equipoData in pairs(equipos) do
 		local teamFrame = Instance.new("Frame")
@@ -5210,7 +5301,8 @@ function refreshTeamList()
 		nameLabel.Parent = teamFrame
 
 		local countLabel = Instance.new("TextLabel")
-		countLabel.Text = #equipoData.Spirits .. " / 4 Espíritus"
+		local spiritCount = equipoData.Spirits and #equipoData.Spirits or 0
+		countLabel.Text = spiritCount .. " / 4 Espíritus"
 		countLabel.Size = UDim2.new(1, 0, 0.45, 0)
 		countLabel.Position = UDim2.new(0, 0, 0.55, 0)
 		countLabel.BackgroundTransparency = 1
@@ -5221,13 +5313,189 @@ function refreshTeamList()
 	end
 end
 
--- Al presionar "+" se abre la ventana de creación
+local function toggleEquipoGui()
+	spiritSelectionFrame.Visible = false
+	creationFrame.Visible = false
+	if roleFrame then roleFrame.Visible = false end
+	mainFrame.Visible = not mainFrame.Visible
+
+	if mainFrame.Visible then
+		refreshTeamList()
+	end
+end
+
+openButton.MouseButton1Click:Connect(toggleEquipoGui)
+closeButton.MouseButton1Click:Connect(function()
+	mainFrame.Visible = false
+end)
+
+-- ====================== CREAR EQUIPO ======================
+
 createButton.MouseButton1Click:Connect(function()
 	creationFrame.Visible = true
 	mainFrame.Visible = false
 end)
 
-print("✅ [EquipoGui] GUI actualizada correctamente.")
+-- ====================== SELECCIÓN DE SPIRIT + ROLES ======================
+
+for i = 1, 4 do
+	local slot = creationFrame:FindFirstChild("Slot" .. i)
+	if slot then
+		slot.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 
+				or input.UserInputType == Enum.UserInputType.Touch then
+
+				selectedSlot = slot
+				spiritSelectionFrame.Visible = true
+				spiritsList.Visible = true
+
+				if roleFrame then roleFrame.Visible = false end
+
+				-- Limpiar lista
+				for _, child in ipairs(spiritsList:GetChildren()) do
+					if child:IsA("Frame") then child:Destroy() end
+				end
+
+				local baseSpirits = GetBaseSpiritsEvent:InvokeServer()
+				if not baseSpirits then return end
+
+				-- Crear las entradas vinculando los datos fijos de cada slotKey de tu base
+				for slotKey, spiritSaveData in pairs(baseSpirits) do
+					local entry = createSpiritEntry(spiritSaveData, slotKey)
+					entry.Parent = spiritsList
+				end
+			end
+		end)
+	end
+end
+
+-- ====================== QUITAR SPIRIT DEL SLOT ======================
+
+for i = 1, 4 do
+	local slot = creationFrame:FindFirstChild("Slot" .. i)
+	if slot then
+		local spiritBtn = slot:FindFirstChild("SpiritButton")
+		if spiritBtn then
+			spiritBtn.MouseButton1Click:Connect(function()
+				for _, child in ipairs(slot:GetChildren()) do
+					if child:IsA("TextLabel") or child:IsA("ViewportFrame") or child.Name == "SpiritName" or child.Name == "SpiritViewport" then
+						child:Destroy()
+					end
+				end
+				print("Spirit quitado del slot", i)
+			end)
+		end
+	end
+end
+
+-- ====================== CONEXIÓN DE BOTONES DE ROL ======================
+
+if roleFrame then
+	local function assignSpiritWithRole(rol)
+		if not selectedSlot or not pendingSpiritData then return end
+
+		-- Limpiar el slot
+		for _, child in ipairs(selectedSlot:GetChildren()) do
+			if child:IsA("TextLabel") or child:IsA("ViewportFrame") 
+				or child.Name == "SpiritName" or child.Name == "SpiritViewport" then
+				child:Destroy()
+			end
+		end
+
+		-- Crear ViewportFrame en el slot
+		local slotViewport = Instance.new("ViewportFrame")
+		slotViewport.Name = "SpiritViewport"
+		slotViewport.Size = UDim2.new(0.8, 0, 0.7, 0)
+		slotViewport.Position = UDim2.new(0.1, 0, 0.05, 0)
+		slotViewport.BackgroundTransparency = 1
+		slotViewport.Parent = selectedSlot
+
+		setupViewportForSpirit(slotViewport, pendingSpiritData.SpiritName)
+
+		-- Nombre + Rol
+		local nameLabel = Instance.new("TextLabel")
+		nameLabel.Name = "SpiritName"
+		nameLabel.Text = pendingSpiritData.SpiritName .. "\n[" .. rol .. "]"
+		nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
+		nameLabel.Position = UDim2.new(0, 0, 0.7, 0)
+		nameLabel.BackgroundTransparency = 0.3
+		nameLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+		nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		nameLabel.Font = Enum.Font.GothamBold
+		nameLabel.TextScaled = true
+		nameLabel.Parent = selectedSlot
+
+		print("✅ Spirit asignado correctamente con rol:", pendingSpiritData.SpiritName, "→", rol, "desde base slot:", pendingBaseSlot)
+
+		-- Cerrar todo y resetear variables de transferencia
+		roleFrame.Visible = false
+		spiritSelectionFrame.Visible = false
+		spiritsList.Visible = true
+		selectedSlot = nil
+		pendingSpiritData = nil
+		pendingBaseSlot = nil
+	end
+
+	-- Conectar botones de forma segura
+	local recBtn = roleFrame:FindFirstChild("RecolectorButton", true)
+	if recBtn and recBtn:IsA("GuiButton") then
+		recBtn.MouseButton1Click:Connect(function() assignSpiritWithRole("Recolector") end)
+	end
+
+	local comBtn = roleFrame:FindFirstChild("CombatienteButton", true)
+	if comBtn and comBtn:IsA("GuiButton") then
+		comBtn.MouseButton1Click:Connect(function() assignSpiritWithRole("Combatiente") end)
+	end
+
+	local curBtn = roleFrame:FindFirstChild("CuradorButton", true)
+	if curBtn and curBtn:IsA("GuiButton") then
+		curBtn.MouseButton1Click:Connect(function() assignSpiritWithRole("Curador") end)
+	end
+end
+
+print("✅ [EquipoGui] Sincronización de eventos de selección asegurada.")
+
+EquipoManager dentro de ServerScriptService
+
+*EquipoManager*
+
+-- Script: EquipoManager
+-- Ubicación: ServerScriptService
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DataManager = require(script.Parent:WaitForChild("DataManager"))
+
+local GetEquiposEvent = ReplicatedStorage:WaitForChild("GetEquiposEvent")
+local CreateEquipoEvent = ReplicatedStorage:WaitForChild("CreateEquipoEvent")
+
+-- Cuando el cliente pide los equipos
+GetEquiposEvent.OnServerInvoke = function(player)
+	return DataManager.GetEquipos(player)
+end
+
+-- Cuando el cliente quiere crear un equipo
+CreateEquipoEvent.OnServerInvoke = function(player, equipoNombre)
+	local success, mensaje = DataManager.CreateEquipo(player, equipoNombre)
+
+	if success then
+		return true
+	else
+		warn("[EquipoManager] No se pudo crear el equipo:", mensaje)
+		return false
+	end
+end
+
+local GetBaseSpiritsEvent = ReplicatedStorage:WaitForChild("GetBaseSpiritsEvent")
+
+GetBaseSpiritsEvent.OnServerInvoke = function(player)
+	local baseNumber = player:GetAttribute("BaseNumber")
+	if not baseNumber then return {} end
+
+	return DataManager.GetBaseSpirits(player, baseNumber)
+end
+
+print("✅ [EquipoManager] Sistema de equipos conectado correctamente.")
+
 
 
 y ya es todo, si llegaron hasta aca digan patata en el chat
