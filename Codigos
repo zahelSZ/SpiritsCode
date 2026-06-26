@@ -2959,7 +2959,7 @@ function DataManager.GetEquipos(player)
 	return (data and data.Equipos) or {}
 end
 
--- Crear un nuevo equipo
+-- Crear un nuevo equipo (Corregido para diccionarios en modo estricto)
 function DataManager.CreateEquipo(player, equipoNombre)
 	local data = sessionData[player]
 	if not data then return false, "No se encontraron datos del jugador" end
@@ -2970,7 +2970,13 @@ function DataManager.CreateEquipo(player, equipoNombre)
 		return false, "Ya existe un equipo con ese nombre"
 	end
 
-	if #data.Equipos >= MAX_EQUIPOS then
+	-- Contar de forma segura cuántos equipos hay en el diccionario
+	local totalEquipos = 0
+	for _ in pairs(data.Equipos) do
+		totalEquipos = totalEquipos + 1
+	end
+
+	if totalEquipos >= MAX_EQUIPOS then
 		return false, "Ya tienes el máximo de equipos permitidos (" .. MAX_EQUIPOS .. ")"
 	end
 
@@ -3055,6 +3061,33 @@ function DataManager.DeleteEquipo(player, equipoNombre)
 	local data = sessionData[player]
 	if not data or not data.Equipos then return false end
 	data.Equipos[equipoNombre] = nil
+	return true
+end
+
+-- Guardar o actualizar la lista completa de espíritus en un equipo de un solo golpe
+function DataManager.SaveEquipo(player, equipoNombre, equipoData)
+	local data = sessionData[player]
+	if not data or not data.Equipos or not data.Equipos[equipoNombre] then
+		return false, "El equipo no existe. Primero debes crearlo."
+	end
+
+	-- Reiniciamos la lista de espíritus del equipo para meter los nuevos limpiamente
+	data.Equipos[equipoNombre].Spirits = {}
+
+	-- Si nos pasaron una lista de espíritus desde el cliente, la procesamos
+	if equipoData and equipoData.Spirits then
+		for _, spiritInfo in ipairs(equipoData.Spirits) do
+			table.insert(data.Equipos[equipoNombre].Spirits, {
+				SpiritName = spiritInfo.SpiritName,
+				Rol = spiritInfo.Rol or "Sin rol",
+				BaseSlot = spiritInfo.BaseSlot
+			})
+		end
+	end
+
+	-- Opcional: Forzar un auto-guardado en el DataStore de Roblox para asegurar el progreso
+	DataManager.SaveData(player)
+
 	return true
 end
 
@@ -5173,39 +5206,30 @@ local creationFrame = gui:WaitForChild("TeamCreationFrame")
 local spiritSelectionFrame = creationFrame:WaitForChild("SpiritSelectionFrame")
 local spiritsList = spiritSelectionFrame:WaitForChild("SpiritsList")
 
--- Buscador seguro del panel de roles
 local roleFrame = gui:FindFirstChild("RoleSelectionFrame", true)
-
 local SpiritTemplate = ReplicatedStorage:WaitForChild("SpiritTemplate")
 
+local DeleteEquipoEvent = ReplicatedStorage:WaitForChild("DeleteEquipoEvent")
 local GetEquiposEvent = ReplicatedStorage:WaitForChild("GetEquiposEvent")
 local CreateEquipoEvent = ReplicatedStorage:WaitForChild("CreateEquipoEvent")
 local GetBaseSpiritsEvent = ReplicatedStorage:WaitForChild("GetBaseSpiritsEvent")
+local SaveEquipoEvent = ReplicatedStorage:WaitForChild("SaveEquipoEvent")
 
 mainFrame.Visible = false
 creationFrame.Visible = false
 spiritSelectionFrame.Visible = false
 if roleFrame then roleFrame.Visible = false end
 
--- ========================================================
--- FUNCIÓN AUXILIAR: BUSCAR MODELO DEL ESPÍRITU
--- ========================================================
 local function findSpiritModel(spiritName: string): Instance?
 	for _, rarityFolder in ipairs(SpiritTemplate:GetChildren()) do
 		local model = rarityFolder:FindFirstChild(spiritName)
-		if model then
-			return model
-		end
+		if model then return model end
 	end
 	return nil
 end
 
--- ========================================================
--- FUNCIÓN: CONFIGURAR VIEWPORT
--- ========================================================
 local function setupViewportForSpirit(viewport: ViewportFrame, spiritName: string)
 	viewport:ClearAllChildren()
-
 	local originalModel = findSpiritModel(spiritName)
 	if originalModel then
 		local clonedModel = originalModel:Clone()
@@ -5225,15 +5249,19 @@ local function setupViewportForSpirit(viewport: ViewportFrame, spiritName: strin
 end
 
 -- ========================================================
--- FUNCIÓN: CREAR ENTRADA CON VIEWPORT FRAME (3D)
+-- CREACIÓN DE ENTRADA CON POSICIONAMIENTO SEGURO
 -- ========================================================
-local function createSpiritEntry(spiritSaveData, baseSlot)
+local function createSpiritEntry(spiritSaveData, baseSlot, index)
 	local spiritName = spiritSaveData.SpiritName or "Espíritu Desconocido"
 
 	local entryFrame = Instance.new("Frame")
+	entryFrame.Name = "Spirit_" .. spiritName
+	-- Multiplicamos el index para que se posicionen uno abajo del otro de forma limpia si no hay UIListLayout
 	entryFrame.Size = UDim2.new(1, -10, 0, 60)
+	entryFrame.Position = UDim2.new(0, 5, 0, (index - 1) * 65)
 	entryFrame.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
 	entryFrame.BorderSizePixel = 0
+	entryFrame.Visible = true 
 
 	local uiCorner = Instance.new("UICorner")
 	uiCorner.CornerRadius = UDim.new(0, 8)
@@ -5258,24 +5286,24 @@ local function createSpiritEntry(spiritSaveData, baseSlot)
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.Parent = entryFrame
 
-	-- 🔥 FIJAR LOS DATOS EXACTOS EN EL EVENTO CLICK PARA EVITAR EL CRUCE
-	entryFrame.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 
-			or input.UserInputType == Enum.UserInputType.Touch then
+	-- Botón invisible encima de toda la celda para capturar el click de forma limpia
+	local clickBtn = Instance.new("TextButton")
+	clickBtn.Size = UDim2.new(1, 0, 1, 0)
+	clickBtn.BackgroundTransparency = 1
+	clickBtn.Text = ""
+	clickBtn.Parent = entryFrame
 
-			pendingSpiritData = spiritSaveData
-			pendingBaseSlot = baseSlot
+	clickBtn.MouseButton1Click:Connect(function()
+		pendingSpiritData = spiritSaveData
+		pendingBaseSlot = baseSlot
 
-			spiritsList.Visible = false
-			if roleFrame then roleFrame.Visible = true end
-			print("🎯 Fijado para asignación:", spiritName, "desde slot base:", baseSlot)
-		end
+		spiritsList.Visible = false
+		if roleFrame then roleFrame.Visible = true end
+		print("🎯 Seleccionado con éxito:", spiritName, "desde slot base:", baseSlot)
 	end)
 
 	return entryFrame
 end
-
--- ====================== FUNCIONES PANEL ======================
 
 local function refreshTeamList()
 	for _, child in ipairs(teamList:GetChildren()) do
@@ -5285,31 +5313,53 @@ local function refreshTeamList()
 	local equipos = GetEquiposEvent:InvokeServer()
 	if not equipos then return end
 
+	local count = 0
 	for equipoNombre, equipoData in pairs(equipos) do
+		count += 1
+
 		local teamFrame = Instance.new("Frame")
 		teamFrame.Size = UDim2.new(1, -10, 0, 55)
 		teamFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
 		teamFrame.Parent = teamList
+		teamFrame.Position = UDim2.new(0, 5, 0, (count - 1) * 60)
 
 		local nameLabel = Instance.new("TextLabel")
 		nameLabel.Text = equipoNombre
-		nameLabel.Size = UDim2.new(1, 0, 0.55, 0)
+		nameLabel.Size = UDim2.new(0.6, 0, 1, 0)
 		nameLabel.BackgroundTransparency = 1
 		nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 		nameLabel.Font = Enum.Font.GothamBold
 		nameLabel.TextScaled = true
 		nameLabel.Parent = teamFrame
 
-		local countLabel = Instance.new("TextLabel")
-		local spiritCount = equipoData.Spirits and #equipoData.Spirits or 0
-		countLabel.Text = spiritCount .. " / 4 Espíritus"
-		countLabel.Size = UDim2.new(1, 0, 0.45, 0)
-		countLabel.Position = UDim2.new(0, 0, 0.55, 0)
-		countLabel.BackgroundTransparency = 1
-		countLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-		countLabel.Font = Enum.Font.Gotham
-		countLabel.TextScaled = true
-		countLabel.Parent = teamFrame
+		-- Botón Eliminar
+		-- Botón Eliminar
+		local deleteBtn = Instance.new("TextButton")
+		deleteBtn.Text = "🗑️ Eliminar"
+		deleteBtn.Size = UDim2.new(0.35, 0, 0.7, 0)
+		deleteBtn.Position = UDim2.new(0.62, 0, 0.15, 0)
+		deleteBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+		deleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		deleteBtn.Font = Enum.Font.GothamBold
+		deleteBtn.TextScaled = true
+		deleteBtn.Parent = teamFrame
+
+		deleteBtn.MouseButton1Click:Connect(function()
+			local success = DeleteEquipoEvent:InvokeServer(equipoNombre)
+			if success then
+				print("✅ Equipo eliminado del servidor:", equipoNombre)
+				-- 🌟 La clave: En lugar de solo borrar el Frame, redibujamos la lista completa
+				refreshTeamList() 
+			else
+				warn("❌ No se pudo eliminar el equipo")
+			end
+		end)
+	end
+
+	-- Importante: Ajustar el CanvasSize del ScrollingFrame
+	if teamList:IsA("ScrollingFrame") then
+		teamList.CanvasSize = UDim2.new(0, 0, 0, count * 60)
+		teamList.AutomaticCanvasSize = Enum.AutomaticSize.None
 	end
 end
 
@@ -5318,40 +5368,29 @@ local function toggleEquipoGui()
 	creationFrame.Visible = false
 	if roleFrame then roleFrame.Visible = false end
 	mainFrame.Visible = not mainFrame.Visible
-
-	if mainFrame.Visible then
-		refreshTeamList()
-	end
+	if mainFrame.Visible then refreshTeamList() end
 end
 
 openButton.MouseButton1Click:Connect(toggleEquipoGui)
-closeButton.MouseButton1Click:Connect(function()
-	mainFrame.Visible = false
-end)
-
--- ====================== CREAR EQUIPO ======================
+closeButton.MouseButton1Click:Connect(function() mainFrame.Visible = false end)
 
 createButton.MouseButton1Click:Connect(function()
 	creationFrame.Visible = true
 	mainFrame.Visible = false
 end)
 
--- ====================== SELECCIÓN DE SPIRIT + ROLES ======================
-
+-- ====================== LISTAR LOS ESPÍRITUS ======================
 for i = 1, 4 do
 	local slot = creationFrame:FindFirstChild("Slot" .. i)
 	if slot then
 		slot.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 
-				or input.UserInputType == Enum.UserInputType.Touch then
-
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				selectedSlot = slot
 				spiritSelectionFrame.Visible = true
 				spiritsList.Visible = true
-
 				if roleFrame then roleFrame.Visible = false end
 
-				-- Limpiar lista
+				-- Limpiar lista anterior
 				for _, child in ipairs(spiritsList:GetChildren()) do
 					if child:IsA("Frame") then child:Destroy() end
 				end
@@ -5359,17 +5398,25 @@ for i = 1, 4 do
 				local baseSpirits = GetBaseSpiritsEvent:InvokeServer()
 				if not baseSpirits then return end
 
-				-- Crear las entradas vinculando los datos fijos de cada slotKey de tu base
+				-- Asegurar que el contenedor sea visible y tenga CanvasSize si es ScrollingFrame
+				if spiritsList:IsA("ScrollingFrame") then
+					spiritsList.CanvasSize = UDim2.new(0, 0, 0, 0)
+				end
+
+				local count = 0
 				for slotKey, spiritSaveData in pairs(baseSpirits) do
-					local entry = createSpiritEntry(spiritSaveData, slotKey)
+					count = count + 1
+					local entry = createSpiritEntry(spiritSaveData, slotKey, count)
 					entry.Parent = spiritsList
+
+					if spiritsList:IsA("ScrollingFrame") then
+						spiritsList.CanvasSize = UDim2.new(0, 0, 0, count * 65)
+					end
 				end
 			end
 		end)
 	end
 end
-
--- ====================== QUITAR SPIRIT DEL SLOT ======================
 
 for i = 1, 4 do
 	local slot = creationFrame:FindFirstChild("Slot" .. i)
@@ -5382,27 +5429,21 @@ for i = 1, 4 do
 						child:Destroy()
 					end
 				end
-				print("Spirit quitado del slot", i)
 			end)
 		end
 	end
 end
 
--- ====================== CONEXIÓN DE BOTONES DE ROL ======================
-
 if roleFrame then
 	local function assignSpiritWithRole(rol)
 		if not selectedSlot or not pendingSpiritData then return end
 
-		-- Limpiar el slot
 		for _, child in ipairs(selectedSlot:GetChildren()) do
-			if child:IsA("TextLabel") or child:IsA("ViewportFrame") 
-				or child.Name == "SpiritName" or child.Name == "SpiritViewport" then
+			if child:IsA("TextLabel") or child:IsA("ViewportFrame") or child.Name == "SpiritName" or child.Name == "SpiritViewport" then
 				child:Destroy()
 			end
 		end
 
-		-- Crear ViewportFrame en el slot
 		local slotViewport = Instance.new("ViewportFrame")
 		slotViewport.Name = "SpiritViewport"
 		slotViewport.Size = UDim2.new(0.8, 0, 0.7, 0)
@@ -5412,7 +5453,6 @@ if roleFrame then
 
 		setupViewportForSpirit(slotViewport, pendingSpiritData.SpiritName)
 
-		-- Nombre + Rol
 		local nameLabel = Instance.new("TextLabel")
 		nameLabel.Name = "SpiritName"
 		nameLabel.Text = pendingSpiritData.SpiritName .. "\n[" .. rol .. "]"
@@ -5425,9 +5465,6 @@ if roleFrame then
 		nameLabel.TextScaled = true
 		nameLabel.Parent = selectedSlot
 
-		print("✅ Spirit asignado correctamente con rol:", pendingSpiritData.SpiritName, "→", rol, "desde base slot:", pendingBaseSlot)
-
-		-- Cerrar todo y resetear variables de transferencia
 		roleFrame.Visible = false
 		spiritSelectionFrame.Visible = false
 		spiritsList.Visible = true
@@ -5436,26 +5473,62 @@ if roleFrame then
 		pendingBaseSlot = nil
 	end
 
-	-- Conectar botones de forma segura
 	local recBtn = roleFrame:FindFirstChild("RecolectorButton", true)
-	if recBtn and recBtn:IsA("GuiButton") then
-		recBtn.MouseButton1Click:Connect(function() assignSpiritWithRole("Recolector") end)
-	end
+	if recBtn and recBtn:IsA("GuiButton") then recBtn.MouseButton1Click:Connect(function() assignSpiritWithRole("Recolector") end) end
 
 	local comBtn = roleFrame:FindFirstChild("CombatienteButton", true)
-	if comBtn and comBtn:IsA("GuiButton") then
-		comBtn.MouseButton1Click:Connect(function() assignSpiritWithRole("Combatiente") end)
-	end
+	if comBtn and comBtn:IsA("GuiButton") then comBtn.MouseButton1Click:Connect(function() assignSpiritWithRole("Combatiente") end) end
 
 	local curBtn = roleFrame:FindFirstChild("CuradorButton", true)
-	if curBtn and curBtn:IsA("GuiButton") then
-		curBtn.MouseButton1Click:Connect(function() assignSpiritWithRole("Curador") end)
-	end
+	if curBtn and curBtn:IsA("GuiButton") then curBtn.MouseButton1Click:Connect(function() assignSpiritWithRole("Curador") end) end
 end
 
-print("✅ [EquipoGui] Sincronización de eventos de selección asegurada.")
+-- ====================== CONFIRMAR Y GUARDAR EQUIPO ======================
+local confirmButton = creationFrame:FindFirstChild("ConfirmButton")
+if confirmButton then
+	confirmButton.MouseButton1Click:Connect(function()
+		local equipoNombre = "Equipo " .. (#teamList:GetChildren() + 1)
+		local spiritsData = {}
 
-EquipoManager dentro de ServerScriptService
+		for i = 1, 4 do
+			local slot = creationFrame:FindFirstChild("Slot" .. i)
+			if slot then
+				local nameLabel = slot:FindFirstChild("SpiritName")
+				if nameLabel then
+					local fullText = nameLabel.Text
+					local spiritName, rol = fullText:match("([^\n]+)\n%[(.+)%]")
+					if spiritName and rol then
+						table.insert(spiritsData, {
+							SpiritName = spiritName,
+							Rol = rol,
+							BaseSlot = i
+						})
+					end
+				end
+			end
+		end
+
+		local success = CreateEquipoEvent:InvokeServer(equipoNombre)
+		if success then
+			local saved = SaveEquipoEvent:InvokeServer(equipoNombre, spiritsData)
+			if saved then
+				print("✅ Equipo guardado con éxito:", equipoNombre)
+				creationFrame.Visible = false
+				spiritSelectionFrame.Visible = false
+				if roleFrame then roleFrame.Visible = false end
+				refreshTeamList()
+			else
+				warn("❌ El servidor rechazó el guardado. Revisa la consola del servidor.")
+			end
+		else
+			warn("❌ No se pudo crear el equipo inicial.")
+		end
+	end)
+end
+
+print("✅ [EquipoGuiHandler] Despliegue de lista e indexación corregidos.")
+
+
 
 *EquipoManager*
 
@@ -5467,16 +5540,15 @@ local DataManager = require(script.Parent:WaitForChild("DataManager"))
 
 local GetEquiposEvent = ReplicatedStorage:WaitForChild("GetEquiposEvent")
 local CreateEquipoEvent = ReplicatedStorage:WaitForChild("CreateEquipoEvent")
+local GetBaseSpiritsEvent = ReplicatedStorage:WaitForChild("GetBaseSpiritsEvent")
+local SaveEquipoEvent = ReplicatedStorage:WaitForChild("SaveEquipoEvent")
 
--- Cuando el cliente pide los equipos
 GetEquiposEvent.OnServerInvoke = function(player)
 	return DataManager.GetEquipos(player)
 end
 
--- Cuando el cliente quiere crear un equipo
 CreateEquipoEvent.OnServerInvoke = function(player, equipoNombre)
 	local success, mensaje = DataManager.CreateEquipo(player, equipoNombre)
-
 	if success then
 		return true
 	else
@@ -5485,17 +5557,50 @@ CreateEquipoEvent.OnServerInvoke = function(player, equipoNombre)
 	end
 end
 
-local GetBaseSpiritsEvent = ReplicatedStorage:WaitForChild("GetBaseSpiritsEvent")
-
 GetBaseSpiritsEvent.OnServerInvoke = function(player)
 	local baseNumber = player:GetAttribute("BaseNumber")
-	if not baseNumber then return {} end
+	if not baseNumber then 
+		warn("[EquipoManager] El jugador no tiene un BaseNumber asignado.")
+		return {} 
+	end
 
-	return DataManager.GetBaseSpirits(player, baseNumber)
+	local spirits = DataManager.GetBaseSpirits(player, baseNumber)
+	return spirits
 end
 
-print("✅ [EquipoManager] Sistema de equipos conectado correctamente.")
+-- 🔥 Línea 46 Corregida con validación adaptativa de nombre de función
+SaveEquipoEvent.OnServerInvoke = function(player, equipoNombre, spiritsData)
+	if not equipoNombre or not spiritsData then
+		return false, "Datos inválidos"
+	end
 
+	-- Buscar qué función de guardado existe en tu DataManager
+	local saveFunction = DataManager.SaveEquipo or DataManager.SaveTeam or DataManager.GuardarEquipo
+
+	if not saveFunction then
+		warn("❌ ERROR: No se encontró la función de guardado en el DataManager. Verifica si se llama SaveEquipo, SaveTeam o GuardarEquipo.")
+		return false, "Función de guardado no encontrada en DataManager"
+	end
+
+	local success = saveFunction(player, equipoNombre, {
+		Spirits = spiritsData
+	})
+
+	if success then
+		print("[EquipoManager] Equipo guardado exitosamente:", equipoNombre, "para", player.Name)
+		return true
+	else
+		return false, "No se pudo guardar el equipo"
+	end
+end
+
+local DeleteEquipoEvent = ReplicatedStorage:WaitForChild("DeleteEquipoEvent")
+
+DeleteEquipoEvent.OnServerInvoke = function(player, equipoNombre)
+	return DataManager.DeleteEquipo(player, equipoNombre)
+end
+
+print("✅ [EquipoManager] Servidor protegido contra funciones Nil.")
 
 
 y ya es todo, si llegaron hasta aca digan patata en el chat
