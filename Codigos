@@ -5797,5 +5797,87 @@ end
 
 print("✅ [EquipoManager] Servidor protegido contra funciones Nil.")
 
+PortalHandler dentro de portal
+
+*PortalHandler*
+
+-- LocalScript: PortalHandler
+-- Ubicación: Dentro del modelo del Portal
+
+local ProximityPrompt = script.Parent:WaitForChild("ProximityPrompt")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+
+-- Referencias a las GUIs
+local portalGui = player:WaitForChild("PlayerGui"):WaitForChild("PortalTeamSelectionGui")
+local mainFrame = portalGui:WaitForChild("MainFrame")
+local teamList = mainFrame:WaitForChild("TeamList")
+
+local GetEquiposEvent = ReplicatedStorage:WaitForChild("GetEquiposEvent")
+
+-- Función para llenar la lista de equipos
+local function loadPlayerTeams()
+    -- Limpiamos los equipos anteriores
+    for _, child in ipairs(teamList:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+
+    local equipos = GetEquiposEvent:InvokeServer()
+    if not equipos then return end
+
+    for equipoNombre, equipoData in pairs(equipos) do
+        local teamFrame = Instance.new("Frame")
+        teamFrame.Size = UDim2.new(0, 180, 0, 120) -- Tamaño de cada tarjeta de equipo
+        teamFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+        teamFrame.Parent = teamList
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Text = equipoNombre
+        nameLabel.Size = UDim2.new(1, 0, 0.4, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextScaled = true
+        nameLabel.Parent = teamFrame
+
+        local countLabel = Instance.new("TextLabel")
+        local spiritCount = equipoData.Spirits and #equipoData.Spirits or 0
+        countLabel.Text = spiritCount .. " Spirits"
+        countLabel.Size = UDim2.new(1, 0, 0.3, 0)
+        countLabel.Position = UDim2.new(0, 0, 0.45, 0)
+        countLabel.BackgroundTransparency = 1
+        countLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+        countLabel.Font = Enum.Font.Gotham
+        countLabel.TextScaled = true
+        countLabel.Parent = teamFrame
+
+        -- Al hacer clic en el equipo
+        teamFrame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                print("Seleccionaste el equipo:", equipoNombre)
+                -- Aquí después abriremos la segunda GUI con los detalles del equipo
+            end
+        end)
+    end
+end
+
+-- Cuando el jugador use el Portal
+ProximityPrompt.Triggered:Connect(function(triggeredPlayer)
+    if triggeredPlayer == player then
+        portalGui.Enabled = true
+        loadPlayerTeams()
+    end
+end)
+
+-- Cerrar la GUI si el jugador se aleja del Portal
+ProximityPrompt.PromptHidden:Connect(function()
+    portalGui.Enabled = false
+end)
+
+print("✅ [PortalHandler] Script del Portal del Bosque cargado.")
+
 
 y ya es todo, si llegaron hasta aca digan patata en el chat
