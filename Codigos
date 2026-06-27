@@ -5190,6 +5190,8 @@ dentro de STarterGui hay un ScreenGui llamado EquipoGui y dentro de ahi hay un l
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService") 
+
 local player = Players.LocalPlayer
 
 local selectedSlot = nil
@@ -5209,15 +5211,24 @@ local spiritsList = spiritSelectionFrame:WaitForChild("SpiritsList")
 local roleFrame = gui:FindFirstChild("RoleSelectionFrame", true)
 local SpiritTemplate = ReplicatedStorage:WaitForChild("SpiritTemplate")
 
+-- Eventos del Servidor
 local DeleteEquipoEvent = ReplicatedStorage:WaitForChild("DeleteEquipoEvent")
 local GetEquiposEvent = ReplicatedStorage:WaitForChild("GetEquiposEvent")
 local CreateEquipoEvent = ReplicatedStorage:WaitForChild("CreateEquipoEvent")
 local GetBaseSpiritsEvent = ReplicatedStorage:WaitForChild("GetBaseSpiritsEvent")
 local SaveEquipoEvent = ReplicatedStorage:WaitForChild("SaveEquipoEvent")
+-- 🌟 AGREGADO: Declaración del evento que faltaba para leer las estadísticas
+local GetSpiritStatsEvent = ReplicatedStorage:WaitForChild("GetSpiritStatsEvent")
 
+-- El Tooltip Flotante ahora se busca directamente en la GUI principal
+local teamInfoFrame = gui:WaitForChild("TeamInfoFrame")
+local contentList = teamInfoFrame:WaitForChild("ContentList")
+
+-- Configuración Inicial de Visibilidad
 mainFrame.Visible = false
 creationFrame.Visible = false
 spiritSelectionFrame.Visible = false
+teamInfoFrame.Visible = false
 if roleFrame then roleFrame.Visible = false end
 
 local function findSpiritModel(spiritName: string): Instance?
@@ -5248,6 +5259,54 @@ local function setupViewportForSpirit(viewport: ViewportFrame, spiritName: strin
 	end
 end
 
+-- ====================== MOSTRAR STATS DE UN SPIRIT AL PASAR EL MOUSE ======================
+-- 🌟 MOVIDO AQUÍ ARRIBA: Para que 'createSpiritEntry' pueda conocer esta función antes de ejecutarla
+local function showSpiritStats(spiritName)
+	-- Limpiar contenido anterior
+	for _, child in ipairs(contentList:GetChildren()) do
+		if child:IsA("TextLabel") or child:IsA("Frame") or child:IsA("UIListLayout") then
+			child:Destroy()
+		end
+	end
+
+	-- Pedir las estadísticas al servidor
+	local stats = GetSpiritStatsEvent:InvokeServer(spiritName)
+	if not stats then return end
+
+	-- Título
+	local title = Instance.new("TextLabel")
+	title.Text = spiritName
+	title.Size = UDim2.new(1, 0, 0, 30)
+	title.BackgroundTransparency = 1
+	title.TextColor3 = Color3.fromRGB(255, 255, 255)
+	title.Font = Enum.Font.GothamBold
+	title.TextScaled = true
+	title.Parent = contentList
+
+	-- Mostrar stats
+	local statsText = string.format(
+		"Ataque: %s\nVida: %s\nRecolección: %s\nInventario: %s\nHabilidad: %s",
+		stats.Ataque or "?", 
+		stats.Vida or "?", 
+		stats.Recoleccion or "?", 
+		stats.Inventario or "?", 
+		stats.Habilidad or "Sin habilidad"
+	)
+
+	local statsLabel = Instance.new("TextLabel")
+	statsLabel.Text = statsText
+	statsLabel.Size = UDim2.new(1, 0, 0, 100) -- Cambiado a tamaño fijo absoluto para que TextScaled no se rompa
+	statsLabel.Position = UDim2.new(0, 5, 0, 35)
+	statsLabel.BackgroundTransparency = 1
+	statsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	statsLabel.Font = Enum.Font.Gotham
+	statsLabel.TextScaled = true
+	statsLabel.TextXAlignment = Enum.TextXAlignment.Left
+	statsLabel.Parent = contentList
+
+	teamInfoFrame.Visible = true
+end
+
 -- ========================================================
 -- CREACIÓN DE ENTRADA CON POSICIONAMIENTO SEGURO
 -- ========================================================
@@ -5256,17 +5315,17 @@ local function createSpiritEntry(spiritSaveData, baseSlot, index)
 
 	local entryFrame = Instance.new("Frame")
 	entryFrame.Name = "Spirit_" .. spiritName
-	-- Multiplicamos el index para que se posicionen uno abajo del otro de forma limpia si no hay UIListLayout
 	entryFrame.Size = UDim2.new(1, -10, 0, 60)
 	entryFrame.Position = UDim2.new(0, 5, 0, (index - 1) * 65)
 	entryFrame.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
 	entryFrame.BorderSizePixel = 0
-	entryFrame.Visible = true 
+	entryFrame.Visible = true
 
 	local uiCorner = Instance.new("UICorner")
 	uiCorner.CornerRadius = UDim.new(0, 8)
 	uiCorner.Parent = entryFrame
 
+	-- Viewport
 	local viewport = Instance.new("ViewportFrame")
 	viewport.Size = UDim2.new(0, 50, 0, 50)
 	viewport.Position = UDim2.new(0, 5, 0, 5)
@@ -5275,6 +5334,7 @@ local function createSpiritEntry(spiritSaveData, baseSlot, index)
 
 	setupViewportForSpirit(viewport, spiritName)
 
+	-- Nombre
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Size = UDim2.new(1, -70, 1, 0)
 	nameLabel.Position = UDim2.new(0, 65, 0, 0)
@@ -5286,7 +5346,7 @@ local function createSpiritEntry(spiritSaveData, baseSlot, index)
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.Parent = entryFrame
 
-	-- Botón invisible encima de toda la celda para capturar el click de forma limpia
+	-- Botón invisible para seleccionar
 	local clickBtn = Instance.new("TextButton")
 	clickBtn.Size = UDim2.new(1, 0, 1, 0)
 	clickBtn.BackgroundTransparency = 1
@@ -5296,15 +5356,98 @@ local function createSpiritEntry(spiritSaveData, baseSlot, index)
 	clickBtn.MouseButton1Click:Connect(function()
 		pendingSpiritData = spiritSaveData
 		pendingBaseSlot = baseSlot
-
 		spiritsList.Visible = false
 		if roleFrame then roleFrame.Visible = true end
-		print("🎯 Seleccionado con éxito:", spiritName, "desde slot base:", baseSlot)
+	end)
+
+	-- ================================
+	-- HOVER PARA MOSTRAR ESTADÍSTICAS 
+	-- ================================
+	entryFrame.MouseEnter:Connect(function()
+		local mousePos = UserInputService:GetMouseLocation()
+		showSpiritStats(spiritName)
+		teamInfoFrame.Position = UDim2.new(0, mousePos.X + 15, 0, mousePos.Y + 10)
+	end)
+
+	entryFrame.MouseLeave:Connect(function()
+		teamInfoFrame.Visible = false
 	end)
 
 	return entryFrame
 end
 
+-- ====================== TOOLTIP FLOTANTE DE EQUIPO OPTIMIZADO ======================
+local function showTeamInfo(equipoNombre, mousePosition)
+	-- 1. Limpiar contenido anterior
+	for _, child in ipairs(contentList:GetChildren()) do
+		if child:IsA("TextLabel") or child:IsA("Frame") or child:IsA("UIListLayout") then
+			child:Destroy()
+		end
+	end
+
+	-- 2. Crear un Layout automático para que la info NO se amontone
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.Padding = UDim.new(0, 8) 
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Parent = contentList
+
+	local equipos = GetEquiposEvent:InvokeServer()
+	if not equipos or not equipos[equipoNombre] then return end
+
+	local equipoData = equipos[equipoNombre]
+	local spirits = equipoData.Spirits or {}
+
+	-- 3. Título del equipo (Grande y Centrado)
+	local title = Instance.new("TextLabel")
+	title.Text = equipoNombre
+	title.Size = UDim2.new(1, 0, 0, 35)
+	title.BackgroundTransparency = 1
+	title.TextColor3 = Color3.fromRGB(255, 255, 255)
+	title.Font = Enum.Font.GothamBold
+	title.TextScaled = true 
+	title.LayoutOrder = 1
+	title.Parent = contentList
+
+	-- 4. Mostrar cada Spirit con su Viewport GRANDE + Rol
+	local layoutCounter = 2
+	for _, spiritInfo in ipairs(spirits) do
+		local rowFrame = Instance.new("Frame")
+		rowFrame.Name = "Row_" .. spiritInfo.SpiritName
+		rowFrame.Size = UDim2.new(1, 0, 0, 55) 
+		rowFrame.BackgroundTransparency = 1
+		rowFrame.LayoutOrder = layoutCounter
+		rowFrame.Parent = contentList
+		layoutCounter += 1
+
+		local miniViewport = Instance.new("ViewportFrame")
+		miniViewport.Size = UDim2.new(0, 50, 0, 50)
+		miniViewport.Position = UDim2.new(0, 5, 0, 2.5)
+		miniViewport.BackgroundTransparency = 1
+		miniViewport.Parent = rowFrame
+
+		setupViewportForSpirit(miniViewport, spiritInfo.SpiritName)
+
+		local infoLabel = Instance.new("TextLabel")
+		infoLabel.Text = spiritInfo.SpiritName .. "  →  [" .. (spiritInfo.Rol or "Sin rol") .. "]"
+		infoLabel.Size = UDim2.new(1, -70, 0.8, 0)
+		infoLabel.Position = UDim2.new(0, 60, 0.1, 0) 
+		infoLabel.BackgroundTransparency = 1
+		infoLabel.TextColor3 = Color3.fromRGB(255, 255, 255) 
+		infoLabel.Font = Enum.Font.GothamBold
+		infoLabel.TextScaled = true 
+		infoLabel.TextXAlignment = Enum.TextXAlignment.Left
+		infoLabel.Parent = rowFrame
+	end
+
+	-- 5. Configurar anclaje para que aparezca ARRIBA del mouse
+	teamInfoFrame.AnchorPoint = Vector2.new(0, 1)
+
+	local topBarCompensation = 36
+	teamInfoFrame.Position = UDim2.new(0, mousePosition.X, 0, mousePosition.Y - topBarCompensation)
+	teamInfoFrame.Visible = true
+end
+
+-- ====================== REFRESCAR LISTA DE EQUIPOS ======================
 local function refreshTeamList()
 	for _, child in ipairs(teamList:GetChildren()) do
 		if child:IsA("Frame") then child:Destroy() end
@@ -5332,12 +5475,19 @@ local function refreshTeamList()
 		nameLabel.TextScaled = true
 		nameLabel.Parent = teamFrame
 
-		-- Botón Eliminar
+		-- Hacer clic en el equipo para mostrar info
+		teamFrame.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				local mousePos = UserInputService:GetMouseLocation()
+				showTeamInfo(equipoNombre, mousePos)
+			end
+		end)
+
 		-- Botón Eliminar
 		local deleteBtn = Instance.new("TextButton")
-		deleteBtn.Text = "🗑️ Eliminar"
-		deleteBtn.Size = UDim2.new(0.35, 0, 0.7, 0)
-		deleteBtn.Position = UDim2.new(0.62, 0, 0.15, 0)
+		deleteBtn.Text = "🗑️"
+		deleteBtn.Size = UDim2.new(0.3, 0, 0.7, 0)
+		deleteBtn.Position = UDim2.new(0.68, 0, 0.15, 0)
 		deleteBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 		deleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 		deleteBtn.Font = Enum.Font.GothamBold
@@ -5347,36 +5497,37 @@ local function refreshTeamList()
 		deleteBtn.MouseButton1Click:Connect(function()
 			local success = DeleteEquipoEvent:InvokeServer(equipoNombre)
 			if success then
-				print("✅ Equipo eliminado del servidor:", equipoNombre)
-				-- 🌟 La clave: En lugar de solo borrar el Frame, redibujamos la lista completa
-				refreshTeamList() 
-			else
-				warn("❌ No se pudo eliminar el equipo")
+				teamInfoFrame.Visible = false 
+				refreshTeamList()
 			end
 		end)
 	end
 
-	-- Importante: Ajustar el CanvasSize del ScrollingFrame
 	if teamList:IsA("ScrollingFrame") then
 		teamList.CanvasSize = UDim2.new(0, 0, 0, count * 60)
-		teamList.AutomaticCanvasSize = Enum.AutomaticSize.None
 	end
 end
 
+-- ====================== CONTROLES GENERALES ======================
 local function toggleEquipoGui()
 	spiritSelectionFrame.Visible = false
 	creationFrame.Visible = false
+	teamInfoFrame.Visible = false
 	if roleFrame then roleFrame.Visible = false end
 	mainFrame.Visible = not mainFrame.Visible
 	if mainFrame.Visible then refreshTeamList() end
 end
 
 openButton.MouseButton1Click:Connect(toggleEquipoGui)
-closeButton.MouseButton1Click:Connect(function() mainFrame.Visible = false end)
+closeButton.MouseButton1Click:Connect(function() 
+	mainFrame.Visible = false 
+	teamInfoFrame.Visible = false
+end)
 
 createButton.MouseButton1Click:Connect(function()
 	creationFrame.Visible = true
 	mainFrame.Visible = false
+	teamInfoFrame.Visible = false
 end)
 
 -- ====================== LISTAR LOS ESPÍRITUS ======================
@@ -5390,7 +5541,6 @@ for i = 1, 4 do
 				spiritsList.Visible = true
 				if roleFrame then roleFrame.Visible = false end
 
-				-- Limpiar lista anterior
 				for _, child in ipairs(spiritsList:GetChildren()) do
 					if child:IsA("Frame") then child:Destroy() end
 				end
@@ -5398,7 +5548,6 @@ for i = 1, 4 do
 				local baseSpirits = GetBaseSpiritsEvent:InvokeServer()
 				if not baseSpirits then return end
 
-				-- Asegurar que el contenedor sea visible y tenga CanvasSize si es ScrollingFrame
 				if spiritsList:IsA("ScrollingFrame") then
 					spiritsList.CanvasSize = UDim2.new(0, 0, 0, 0)
 				end
@@ -5485,9 +5634,16 @@ end
 
 -- ====================== CONFIRMAR Y GUARDAR EQUIPO ======================
 local confirmButton = creationFrame:FindFirstChild("ConfirmButton")
+
 if confirmButton then
 	confirmButton.MouseButton1Click:Connect(function()
-		local equipoNombre = "Equipo " .. (#teamList:GetChildren() + 1)
+		local teamNameInput = creationFrame:FindFirstChild("TeamNameInput")
+		local equipoNombre = "Equipo sin nombre"
+
+		if teamNameInput and teamNameInput:IsA("TextBox") and teamNameInput.Text ~= "" then
+			equipoNombre = teamNameInput.Text
+		end
+
 		local spiritsData = {}
 
 		for i = 1, 4 do
@@ -5497,6 +5653,7 @@ if confirmButton then
 				if nameLabel then
 					local fullText = nameLabel.Text
 					local spiritName, rol = fullText:match("([^\n]+)\n%[(.+)%]")
+
 					if spiritName and rol then
 						table.insert(spiritsData, {
 							SpiritName = spiritName,
@@ -5509,25 +5666,63 @@ if confirmButton then
 		end
 
 		local success = CreateEquipoEvent:InvokeServer(equipoNombre)
+
 		if success then
 			local saved = SaveEquipoEvent:InvokeServer(equipoNombre, spiritsData)
+
 			if saved then
-				print("✅ Equipo guardado con éxito:", equipoNombre)
+				print("✅ Equipo guardado:", equipoNombre)
 				creationFrame.Visible = false
 				spiritSelectionFrame.Visible = false
 				if roleFrame then roleFrame.Visible = false end
 				refreshTeamList()
 			else
-				warn("❌ El servidor rechazó el guardado. Revisa la consola del servidor.")
+				warn("❌ Error al guardar el equipo")
 			end
 		else
-			warn("❌ No se pudo crear el equipo inicial.")
+			warn("❌ No se pudo crear el equipo")
 		end
 	end)
 end
 
-print("✅ [EquipoGuiHandler] Despliegue de lista e indexación corregidos.")
+-- ====================== BOTÓN CERRAR TEAM CREATION ======================
+local closeCreationBtn = creationFrame:FindFirstChild("CloseCreationButton")
 
+if closeCreationBtn then
+	closeCreationBtn.MouseButton1Click:Connect(function()
+		creationFrame.Visible = false
+		spiritSelectionFrame.Visible = false
+		if roleFrame then roleFrame.Visible = false end
+
+		for i = 1, 4 do
+			local slot = creationFrame:FindFirstChild("Slot" .. i)
+			if slot then
+				for _, child in ipairs(slot:GetChildren()) do
+					if child:IsA("TextLabel") or child:IsA("ViewportFrame") 
+						or child.Name == "SpiritName" or child.Name == "SpiritViewport" then
+						child:Destroy()
+					end
+				end
+			end
+		end
+	end)
+end
+
+-- Ocultar el tooltip al hacer clic fuera del TeamInfoFrame
+UserInputService.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		local mousePos = UserInputService:GetMouseLocation()
+		local framePos = teamInfoFrame.AbsolutePosition
+		local frameSize = teamInfoFrame.AbsoluteSize
+
+		if not (mousePos.X >= framePos.X and mousePos.X <= framePos.X + frameSize.X and
+			mousePos.Y >= framePos.Y and mousePos.Y <= framePos.Y + frameSize.Y) then
+			teamInfoFrame.Visible = false
+		end
+	end
+end)
+
+print("✅ [EquipoGuiHandler] Sistema completo de Tooltips y Equipos listo.")
 
 
 *EquipoManager*
